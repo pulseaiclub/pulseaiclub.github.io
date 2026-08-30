@@ -312,6 +312,9 @@ img { max-width: 100%; height: auto; }
   padding-bottom: 4rem;
 }
 
+// Mobile overlay only — must not occupy a grid track on desktop.
+.scrim { display: none; }
+
 .sidebar {
   position: sticky;
   top: calc(var(--header-h) + 1.75rem);
@@ -1234,6 +1237,7 @@ img { max-width: 100%; height: auto; }
   body.nav-open {
     .sidebar { transform: translateX(0); }
     .scrim {
+      display: block;
       position: fixed;
       inset: 0;
       z-index: 110;
