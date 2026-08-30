@@ -11,9 +11,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Yaegi extensions:** Go extensions under `~/.phi/extensions` and
+  `<cwd>/.phi/extensions` (`*.go` / `*/index.go`). Public API `ext`, runtime
+  `internal/extension`. Supports `On` events, `RegisterTool`,
+  `RegisterCommand`, session/tool lifecycle. See
+  [Extensions](/docs/extensions/). Palette: **extensions → list / reload**.
+  Disable with `PHI_EXTENSIONS=off`.
+
 ### Changed
 
+- **Breaking:** shell `plugin.json` hooks (`internal/hooks`, `PHI_HOOKS`,
+  `.phi/hooks`) are removed. Rewrite policy as Go extensions (migration table
+  in [Extensions](/docs/extensions/)).
 - TUI: `agent_spawn` / `agent_wait` tool rows show role in the detail line (`explore · …`).
+
+### Removed
+
+- Shell hook plugins (`plugin.json` + `type: "command"`), `doc/hooks.md`, and
+  related TUI **hooks →** commands.
 
 ## [0.18.1] — 2026-08-28
 

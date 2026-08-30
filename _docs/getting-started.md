@@ -57,7 +57,7 @@ export PHI_API_KEY=sk-...
 phi
 ```
 
-On first start, phi automatically creates `~/.phi/{bin,skills,hooks,session}`.
+On first start, phi automatically creates `~/.phi/{bin,skills,extensions,session,jobs}`.
 Search tools (`fd`, `rg`) download into `~/.phi/bin` in the background when
 missing.
 

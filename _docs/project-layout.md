@@ -8,6 +8,7 @@ order: 13
 | Path | Purpose |
 | ------------------------ | ---------------------------------------------- |
 | `cmd/` | Entry points (`main.go` via pli: `phi run`, `phi update`, `phi sessions`, …) |
+| `ext/` | Public API for yaegi extensions (`API`, events, ToolDef) |
 | `internal/util/update/` | Self-update check + GitHub Releases install |
 | `internal/agent/` | Agent engine, executor, jobs |
 | `internal/agent/prompt/` | System prompt templates + Skills/MCP catalogs |
@@ -24,19 +25,19 @@ order: 13
 | `internal/tui/footer/` | Activity spinner, token labels, update hint |
 | `internal/tui/overlays/` | Permission / continue-ask panels |
 | `internal/tui/submit/` | Submit, cancel, slash dispatch, bash runner |
-| `internal/tui/commands/` | Slash/palette registry, session/hook commands |
+| `internal/tui/commands/` | Slash/palette registry, session/extension commands |
 | `internal/tui/pathutil/` | Cwd + git branch path labels |
 | `internal/tui/controller/` | Engine lifecycle, Bus/Msg, activity |
 | `internal/version/` | Build-time `Version` (splash / `phi update`) |
 | `internal/util/` | Shared helpers (diff, retry, SSE, file search, …) |
 | `internal/permission/` | Permission policy and ask gate |
-| `internal/hooks/` | Tool-loop hooks (`plugin.json`, Manager, shell command execution) |
+| `internal/extension/` | Yaegi extension discover/load/runner |
 | `internal/mcp/` | MCP config + stdio client + pool (meta-tool route) |
 
 ## Design docs
 
 | Path | Purpose |
 | ---- | ------- |
-| [Hooks](/docs/hooks/) | Hooks: concepts, authoring, protocol reference |
+| [Extensions](/docs/extensions/) | Extensions: discover, API, events, migration from hooks |
 | [MCP](/docs/mcp/) | MCP: zero schema pollution, meta-tools, config, CLI |
 | [TUI architecture](/docs/tui-architecture/) | TUI: package layout, aggregation, interaction flows |

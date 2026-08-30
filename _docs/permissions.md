@@ -44,5 +44,5 @@ In the TUI, an approval dialog replaces the editor with options to approve,
 deny with feedback, or allow all for the session / for every session. The
 palette's settings → permissions entry toggles session-wide bypass.
 
-> **Note:** in `permissions.mode: readonly`, all loaded hooks still run —
-> there is no `fail_closed` flag in the v1 hook schema.
+> **Note:** extensions run with your full process permissions — the Gate
+> protects tool execution, not the extension's own Go code.

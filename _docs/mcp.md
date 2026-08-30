@@ -18,7 +18,7 @@ tokens before you ask a question.
 | --- | --- | --- |
 | Context | All schemas injected at startup | Model sees only three meta-tools |
 | Many servers | Uninstall / reload Tetris | Always configured; call on demand |
-| Permissions | Separate system or wide open | Same Gate / Ask / Hooks as builtins |
+| Permissions | Separate system or wide open | Same Gate / Ask / Extensions as builtins |
 | Footprint | Heavy SDKs, always-on processes | Hand-rolled Go stdio client, lazy start |
 
 Agent-facing tools:
@@ -47,7 +47,7 @@ User prompt
   → model may call mcp_list(server=…) directly from the catalog
   → lazy Client → spawn → initialize → tools/list → names only
   → mcp_inspect → compact param summary
-  → mcp_call → Executor → PreHooks → Gate → tools/call → result to model
+  → mcp_call → Executor → ExtensionPre → Gate → tools/call → result to model
 ```
 
 Human CLI and the agent share the same `internal/mcp` stack:

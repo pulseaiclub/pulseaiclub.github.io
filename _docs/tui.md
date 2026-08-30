@@ -24,7 +24,7 @@ and per-language syntax highlighting. Structural markers (`#`, backticks,
 - `?` — shortcut help picker (lists `/`, `!`, `@`, and key bindings; `Esc` closes)
 - `!command` — run a shell command locally and stream its output into the
   transcript (see [Commands](#commands))
-- `Ctrl+K` — command palette: settings → model / theme / permissions / agents, skills, hooks
+- `Ctrl+K` — command palette: settings → model / theme / permissions / agents, skills, extensions
 
 ## Keyboard shortcuts
 
