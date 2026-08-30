@@ -1,0 +1,24 @@
+---
+layout: default
+---
+<div class="docs-shell container">
+  <aside class="sidebar" id="sidebar" aria-label="Documentation sidebar">
+    {%- include sidebar.html -%}
+  </aside>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <main class="doc-main" id="main">
+    <article class="doc-article prose">
+      <header class="doc-header">
+        <h1>{{ page.title }}</h1>
+        {%- if page.description -%}<p class="doc-lede">{{ page.description }}</p>{%- endif -%}
+      </header>
+
+      {{ content }}
+    </article>
+
+    {%- include doc-footer.html -%}
+  </main>
+
+  <aside class="toc" id="toc" aria-label="On this page"></aside>
+</div>

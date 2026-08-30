@@ -1,0 +1,26 @@
+---
+layout: default
+---
+<main id="main" class="blog-shell container">
+  <article class="blog-post prose">
+    <header class="blog-header">
+      <p class="blog-meta">
+        <time datetime="{{ page.date | date: '%Y-%m-%d' }}">{{ page.date | date: '%b %-d, %Y' }}</time>
+        {%- if page.author -%}
+          <span class="blog-sep" aria-hidden="true">·</span>
+          <span>{{ page.author }}</span>
+        {%- endif -%}
+      </p>
+      <h1>{{ page.title }}</h1>
+      {%- if page.description -%}
+        <p class="blog-lede">{{ page.description }}</p>
+      {%- endif -%}
+    </header>
+
+    {{ content }}
+  </article>
+
+  <nav class="blog-back" aria-label="Blog">
+    <a href="{{ '/blog/' | relative_url }}">← All posts</a>
+  </nav>
+</main>
