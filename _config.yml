@@ -1,0 +1,50 @@
+# phi documentation — built with Jekyll on GitHub Pages.
+title: phi
+tagline: A minimal terminal coding agent harness in Go
+description: >-
+  phi is a minimal terminal coding agent harness in Go — sub-agents, hashline
+  edits, a permission gate, and MCP without context death.
+
+url: "https://pulseaiclub.github.io"
+baseurl: ""
+
+repo: "https://github.com/pulseaiclub/phi"
+pages_repo: "https://github.com/pulseaiclub/pulseaiclub.github.io"
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+permalink: pretty
+
+collections:
+  docs:
+    output: true
+    permalink: /docs/:name/
+
+# Every _docs page renders with the docs layout (sidebar + TOC).
+defaults:
+  - scope:
+      path: _docs
+    values:
+      layout: docs
+
+# Sidebar group order (each _docs page sets `group` + `order`).
+doc_groups:
+  - Get started
+  - Using phi
+  - Extending
+  - Reference
+  - Internals
+
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - .gitignore
+  - vendor
+  - node_modules

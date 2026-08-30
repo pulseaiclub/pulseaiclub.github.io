@@ -1,0 +1,22 @@
+{%- assign flat = site.docs | sort: 'order' -%}
+<nav class="docs-nav" aria-label="Documentation">
+  {%- for g in site.doc_groups -%}
+    {%- assign items = flat | where: 'group', g -%}
+    {%- if items.size > 0 -%}
+      <div class="nav-group">
+        <h3 class="nav-group-title">{{ g }}</h3>
+        {%- for item in items -%}
+          <a class="nav-link{% if item.url == page.url %} is-active{% endif %}" href="{{ item.url | relative_url }}">
+            {{ item.title }}
+          </a>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  {%- endfor -%}
+
+  <div class="nav-group nav-group-gap">
+    <h3 class="nav-group-title">Project</h3>
+    <a class="nav-link" href="{{ site.repo }}" rel="noopener">GitHub ↗</a>
+    <a class="nav-link" href="{{ '/docs/changelog/' | relative_url }}">Changelog</a>
+  </div>
+</nav>

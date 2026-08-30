@@ -1,0 +1,23 @@
+{%- assign flat = site.docs | sort: 'order' -%}
+{%- assign prev = '' -%}
+{%- assign nxt = '' -%}
+{%- assign seen = 0 -%}
+{%- for p in flat -%}
+  {%- if seen == 1 and nxt == '' -%}{%- assign nxt = p -%}{%- break -%}{%- endif -%}
+  {%- if p.url == page.url -%}{%- assign seen = 1 -%}{%- else -%}{%- assign prev = p -%}{%- endif -%}
+{%- endfor -%}
+
+<nav class="doc-pager" aria-label="Documentation navigation">
+  <a class="doc-pager-card{% unless prev != '' %} is-empty{% endunless %}" href="{{ prev.url | relative_url }}">
+    <span class="doc-pager-label">← Previous</span>
+    {%- if prev != '' -%}<span class="doc-pager-title">{{ prev.title }}</span>{%- endif -%}
+  </a>
+  <a class="doc-pager-card{% unless nxt != '' %} is-empty{% endunless %}" href="{{ nxt.url | relative_url }}">
+    <span class="doc-pager-label">Next →</span>
+    {%- if nxt != '' -%}<span class="doc-pager-title">{{ nxt.title }}</span>{%- endif -%}
+  </a>
+</nav>
+
+<p class="edit-link">
+  <a href="{{ site.pages_repo }}/blob/main/{{ page.path }}" rel="noopener">Edit this page on GitHub</a>
+</p>
