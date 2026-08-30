@@ -54,7 +54,7 @@
   }
 
   // ------------------------------------------------- heading anchors
-  var article = document.querySelector('.doc-article');
+  var article = document.querySelector('.doc-article, .blog-post');
   if (article) {
     article.querySelectorAll('h2, h3, h4').forEach(function (h) {
       if (!h.id) return;
@@ -68,7 +68,7 @@
   }
 
   // -------------------------------------------------- table scroll wrap
-  document.querySelectorAll('.doc-article table').forEach(function (t) {
+  document.querySelectorAll('.doc-article table, .blog-post table').forEach(function (t) {
     var wrap = document.createElement('div');
     wrap.className = 'table-wrap';
     t.parentNode.insertBefore(wrap, t);
@@ -82,7 +82,42 @@
     return m ? m[1] : 'text';
   }
 
-  document.querySelectorAll('.doc-article pre, .hero pre').forEach(function (pre) {
+  function copyText(btn, text) {
+    function done() {
+      btn.textContent = 'Copied';
+      btn.setAttribute('data-copied', '');
+      setTimeout(function () {
+        btn.textContent = 'Copy';
+        btn.removeAttribute('data-copied');
+      }, 1600);
+    }
+    function fallback(txt) {
+      var ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* noop */ }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallback(text); });
+    } else {
+      fallback(text);
+    }
+  }
+
+  function makeCopyButton() {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'code-copy';
+    btn.textContent = 'Copy';
+    btn.setAttribute('aria-label', 'Copy code to clipboard');
+    return btn;
+  }
+
+  document.querySelectorAll('.doc-article pre, .blog-post pre, .hero pre').forEach(function (pre) {
     var code = pre.querySelector('code');
     if (!code) return;
 
@@ -93,37 +128,9 @@
     lang.className = 'code-lang';
     lang.textContent = langOf(pre);
 
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'code-copy';
-    btn.textContent = 'Copy';
-    btn.setAttribute('aria-label', 'Copy code to clipboard');
-
+    var btn = makeCopyButton();
     btn.addEventListener('click', function () {
-      var text = code.innerText;
-      function done() {
-        btn.textContent = 'Copied';
-        btn.setAttribute('data-copied', '');
-        setTimeout(function () {
-          btn.textContent = 'Copy';
-          btn.removeAttribute('data-copied');
-        }, 1600);
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done).catch(function () { fallback(text); });
-      } else {
-        fallback(text);
-      }
-      function fallback(txt) {
-        var ta = document.createElement('textarea');
-        ta.value = txt;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); done(); } catch (e) { /* noop */ }
-        document.body.removeChild(ta);
-      }
+      copyText(btn, code.innerText);
     });
 
     head.appendChild(lang);
@@ -131,7 +138,30 @@
     pre.parentNode.insertBefore(head, pre);
   });
 
+  // ------------------------------------------- install panel copy
+  document.querySelectorAll('.install-panel .term').forEach(function (term) {
+    var bar = term.querySelector('.term-bar');
+    var cmds = term.querySelectorAll('.term-body .cmd');
+    if (!bar || !cmds.length) return;
+
+    var btn = makeCopyButton();
+    btn.addEventListener('click', function () {
+      var lines = Array.prototype.map.call(cmds, function (el) {
+        return el.textContent;
+      });
+      copyText(btn, lines.join('\n'));
+    });
+    bar.appendChild(btn);
+  });
+
   // -------------------------------------------------------- TOC + scrollspy
+  function headingLabel(h) {
+    var clone = h.cloneNode(true);
+    var anchor = clone.querySelector('a.anchor');
+    if (anchor) anchor.parentNode.removeChild(anchor);
+    return clone.textContent.replace(/\s+/g, ' ').trim();
+  }
+
   var toc = document.getElementById('toc');
   if (toc && article) {
     var headings = Array.prototype.slice.call(
@@ -156,7 +186,7 @@
         var li = document.createElement('li');
         var a = document.createElement('a');
         a.href = '#' + h.id;
-        a.textContent = h.textContent.trim();
+        a.textContent = headingLabel(h);
         if (h.tagName === 'H3') a.className = 'toc-h3';
         li.appendChild(a);
         list.appendChild(li);

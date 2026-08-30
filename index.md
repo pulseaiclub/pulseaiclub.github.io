@@ -9,7 +9,7 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
     <div class="hero-inner">
       <img class="hero-logo" src="/assets/img/pixel-text-PHI.png" alt="phi" width="440" height="200" style="image-rendering:pixelated; image-rendering:crisp-edges;">
 
-      <h1 class="hero-title">A minimal <span class="hero-accent">terminal</span> coding agent harness in Go.</h1>
+      <h1 class="hero-title">A minimal <span class="hero-accent">terminal</span> coding agent harness.</h1>
       <p class="hero-sub">
         Sub-agents, hashline edits, a permission gate, and MCP without context death —
         in a ~12&nbsp;MB binary that stays out of your way.

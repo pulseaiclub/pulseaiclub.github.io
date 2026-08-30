@@ -12,8 +12,10 @@ Built with **Jekyll** and rendered by GitHub Pages from the `main` branch
 
 ```
 ├── index.md            # landing page
+├── blog.md             # blog index (/blog/)
+├── _posts/             # blog posts (YYYY-MM-DD-slug.md)
 ├── _docs/              # documentation pages (Markdown + YAML frontmatter)
-├── _layouts/           # page layouts (home, docs, default)
+├── _layouts/           # page layouts (home, docs, blog, post, default)
 ├── _includes/          # header, sidebar, footer, prev/next nav
 └── assets/
     ├── css/main.scss   # full design system (two themes, dark default)
@@ -42,6 +44,20 @@ To keep docs in sync with the phi repo, edit `_docs/*.md` here and update the
 matching section of the [phi README](https://github.com/pulseaiclub/phi) if
 the change is user-facing. Screenshots in `assets/img/` are copies of
 `phi/assets/` — refresh them when the UI changes.
+
+## Writing blog posts
+
+Add a file under `_posts/` named `YYYY-MM-DD-slug.md`:
+
+```yaml
+---
+title: Hello from phi
+description: One-line summary on the blog index.
+author: PulseAI Club
+---
+```
+
+Posts appear at `/blog/` and individually under `/blog/YYYY/MM/DD/slug/`.
 
 ## Local development
 
