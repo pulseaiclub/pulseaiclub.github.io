@@ -1,141 +1,176 @@
 ---
 title: Extensions
-description: Extend phi with Go — tools, slash commands, and lifecycle event handlers loaded with yaegi.
+description: Extend phi with native binaries — tools, slash commands, and lifecycle event handlers via the PXB protocol.
 group: Extending
 order: 9
 ---
 
-Extensions are Go source files loaded with [yaegi](https://github.com/pulseaiclub/yaegi)
-(the Go interpreter). They replace the former shell `plugin.json` hooks system.
+Extensions are **native binaries** that speak the **Phi eXtension Binary (PXB)**
+protocol over stdin/stdout. They replace the former yaegi-interpreted `.go`
+sources.
 
-> **Security:** extensions run with your full process permissions. Only install
-> from sources you trust.
+> **Security:** Extension processes inherit your permissions. Only install from
+> sources you trust.
 
-## Locations
+## Full event chain
+
+Shaped for subprocess PXB:
+
+```
+user_input ──(transform|handled)──► before_agent_start ──► agent_start
+  └─ turn_start → LLM → tool_execution_start → tool_call → Gate/Ask → Run
+       → tool_result → tool_execution_end → turn_end
+  └─ (no tools) turn_stopping ──(continue+message)──► another turn
+  └─ agent_end
+session_before_switch → session_shutdown → session_start
+session_compact (after auto compaction)
+```
+
+| Event | Mode | Can |
+|-------|------|-----|
+| `user_input` | intercept | rewrite text / `Handled` swallow |
+| `before_agent_start` | intercept | rewrite prompt / append context |
+| `tool_call` | intercept | block / rewrite args / context |
+| `tool_result` | intercept | rewrite content / context / **Stop** agent loop |
+| `turn_stopping` | intercept | `Continue` + steer message |
+| `session_before_switch` | intercept | cancel switch |
+| `session_*` / `agent_*` / `turn_*` / `tool_execution_*` / `session_compact` | subscribe | observe (payload via `SubscribeEvent`) |
+
+Tool loop order remains **ExtensionPre → Gate/Ask → Run → ExtensionPost**.
+
+## Why not JSON lines?
+
+PXB uses a fixed 16-byte little-endian header (`PXB\x01` + type + flags + id +
+length) and **tagged-field** payloads (`tag u16 | kind u8 | value`). Decoders
+skip unknown tags; new events are new `Ev*` codes; new frame types are skipped
+by `payload_len`. See `ext/pxb` package doc for the full evolution rules.
+
+## Layout
 
 | Location | Scope |
 |----------|-------|
-| `~/.phi/extensions/*.go` | Global (all projects) |
-| `~/.phi/extensions/*/index.go` | Global (subdirectory) |
-| `<cwd>/.phi/extensions/*.go` | Project-local |
-| `<cwd>/.phi/extensions/*/index.go` | Project-local (subdirectory) |
+| `~/.phi/extensions/<name>/phi.yaml` | Global |
+| `<cwd>/.phi/extensions/<name>/phi.yaml` | Project-local |
 
-Same extension id (file stem or directory name): project replaces user.
-Disable all with `PHI_EXTENSIONS=off`.
+Same name: project wins. Disable all with `PHI_EXTENSIONS=off`.
 
-## Quick start
+### `phi.yaml`
 
-Create `~/.phi/extensions/hello.go`:
+```yaml
+name: hello
+version: "0.1.0"
+exec: ./hello          # relative to this directory
+description: optional
+enabled: true          # optional, default true
+```
+
+## Authoring (Go SDK)
 
 ```go
 package main
 
 import (
-	"context"
-	"encoding/json"
-
 	"github.com/pulseaiclub/phi/ext"
+	"github.com/pulseaiclub/phi/ext/phi"
 )
 
-// Extension registers a minimal greet tool and /hello command.
-func Extension(phi *ext.API) {
-	phi.RegisterTool(ext.ToolDef{
-		Name:        "greet",
-		Label:       "Greet",
-		Description: "Greet someone by name",
-		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"name": map[string]any{"type": "string", "description": "Name to greet"},
-			},
-			"required": []any{"name"},
-		},
-		Execute: func(ctx context.Context, args json.RawMessage) (ext.ToolResult, error) {
-			var in struct {
-				Name string `json:"name"`
-			}
-			_ = json.Unmarshal(args, &in)
-			msg := "Hello, " + in.Name + "!"
-			return ext.ToolResult{Content: msg, Output: msg}, nil
-		},
-	})
-
-	phi.On(ext.EventToolCall, func(ev ext.ToolCallEvent, ctx *ext.Context) *ext.ToolCallResult {
-		// return &ext.ToolCallResult{Block: true, Reason: "..."} to deny
-		return nil
-	})
-
-	phi.RegisterCommand("hello", ext.CommandDef{
-		Description: "Say hello via toast",
+func main() {
+	m := phi.New("hello", "0.1.0")
+	m.RegisterCommand("hello", ext.Command{
+		Description: "Say hi",
 		Handler: func(args string, ctx *ext.Context) error {
-			name := args
-			if name == "" {
-				name = "world"
-			}
-			if ctx.UI != nil {
-				ctx.UI.Notify("Hello "+name+"!", "info")
-			}
+			m.Notify("info", "Hello!")
+			// m.Submit("follow-up") // after /hello returns
+			// m.SendUserMessage("…") // enqueue a turn anytime
 			return nil
 		},
 	})
+	m.OnUserInput(func(ev ext.UserInputEvent) *ext.UserInputResult {
+		// return &ext.UserInputResult{Handled: true} to swallow
+		// return &ext.UserInputResult{Text: "rewritten"} to transform
+		return nil
+	})
+	m.OnToolCall(func(ev ext.ToolCallEvent) *ext.ToolCallResult {
+		// return &ext.ToolCallResult{Block: true, Reason: "..."} to deny
+		return nil
+	})
+	m.OnToolResult(func(ev ext.ToolResultEvent) *ext.ToolResultResult {
+		// return &ext.ToolResultResult{Stop: true} to end the agent loop
+		return nil
+	})
+	m.OnTurnStopping(func(ev ext.TurnStoppingEvent) *ext.TurnStoppingResult {
+		// return &ext.TurnStoppingResult{Continue: true, Message: "check X"} to steer
+		return nil
+	})
+	m.SubscribeEvent(ext.EventSessionStart, func(ev pxb.EventNotify) {
+		_ = ev // Reason, PreviousSessionID, …
+	})
+	_ = m.Run()
 }
 ```
 
-Entry point: export `func Extension(phi *ext.API)` in `package main`. The phi
-repo ships samples under `.phi/extensions/` (`hello.go`, `guard_bash.go`).
+Requires `import "github.com/pulseaiclub/phi/ext/pxb"` for `SubscribeEvent` payloads.
 
-Reload in TUI: **Ctrl+K → extensions → reload**. List: **extensions → list**.
+UI surface today: **toast** (`Notify`), **footer status** (`SetStatus`), **Submit** / **SendUserMessage**,
+**Confirm** / **ConfirmOpts**.
 
-## Events
+```go
+ok := m.ConfirmOpts(ext.ConfirmRequest{
+	Title: "Delete?", Message: "Remove /tmp/x", Yes: "Delete", No: "Cancel", Danger: true,
+}).OK
+```
 
-| Event | When | Result |
-|-------|------|--------|
-| `tool_call` | Before permission Gate | `{Block, Reason, Input, Context}` |
-| `tool_result` | After tool run | `{Content, Context, Stop, Reason}` |
-| `tool_execution_start` / `tool_execution_end` | Around tool run | notify |
-| `session_start` / `session_shutdown` / `session_before_switch` | Session lifecycle | before_switch may `{Cancel}` |
-| `before_agent_start` | After user submit | `{SystemPromptAppend}` |
-| `agent_start` / `agent_end` | Around Loop | notify |
-| `turn_start` / `turn_end` | Per LLM round | notify |
+Build and install:
 
-Tool loop order remains **ExtensionPre → Gate/Ask → Run → ExtensionPost**
-(does not bypass the permission gate).
+```bash
+go build -o hello .
+mkdir -p ~/.phi/extensions/hello
+cp hello phi.yaml ~/.phi/extensions/hello/
+```
 
-Model-only notes from handlers are wrapped in `<ext_context>…</ext_context>`
-on the tool message (TUI Detail/Output unchanged).
+Reload: **Ctrl+K → extensions → reload**.
 
-## API
+## Install from GitHub
 
-Import `github.com/pulseaiclub/phi/ext` — symbols are injected into yaegi, so
-no extra module download is needed for the `ext` package itself.
+```bash
+phi plugin install alice/greet
+```
 
-| Method | Purpose |
-|--------|---------|
-| `On(event, handler)` | Subscribe |
-| `RegisterTool(ToolDef)` | LLM-callable tool |
-| `RegisterCommand(name, CommandDef)` | Slash command (cannot override builtins) |
-| `GetActiveTools` / `SetActiveTools` / `GetAllTools` | Tool set (after host bind) |
-| `Exec` / `SendUserMessage` | Host actions (after bind) |
+The repo must ship `phi.yaml` **and** the compiled `exec` binary (or a
+release asset layout that includes it). Source-only yaegi repos no longer load.
 
-`ctx.UI`: `Notify`, `Confirm`, `SetStatus` (TUI). Headless `phi run` may have
-no UI.
+## Lifecycle (process)
 
-## Migration from hooks
+1. Discover `phi.yaml`
+2. Spawn `exec` (stderr → `~/.phi/logs/ext-<name>.log`)
+3. Ext → `Hello` · Host → `HelloAck`
+4. Ext → `Register*` / `Subscribe` · Ext → `Ready`
+5. Runtime RPC (`CommandInvoked`, `ToolInvoke`, `Intercept`, `Event`, `HostRequest`, `SessionMeta`)
+6. Host → `Shutdown` · Ext → `ShutdownAck` (then SIGKILL if needed)
 
-Shell `plugin.json` hooks under `~/.phi/hooks` / `.phi/hooks` are **removed**.
-Rewrite policy as Go:
-
-| Old hook | Extension |
-|----------|-----------|
-| PreToolUse deny | `On(EventToolCall, …)` → `Block: true` |
-| PostToolUse context | `On(EventToolResult, …)` → `Context` |
-| Command slash | `RegisterCommand` |
-| SessionStart / Shutdown / BeforeSwitch | matching `session_*` events |
-
-## Layout
+## Packages
 
 | Path | Role |
 |------|------|
-| `ext/` | Public types + `API` for authors |
-| `internal/extension/` | Discover, yaegi loader, Runner |
-| `.phi/extensions/` | Project samples (`hello.go`, `guard_bash.go`) |
+| `ext/` | Shared types (`Tool`, events) |
+| `ext/pxb` | Binary wire protocol |
+| `ext/phi` | Author SDK (`ExtensionAPI.Run`) |
+| `internal/extension` | Discover, spawn, Runner shims |
+
+## Migration from yaegi
+
+| Old | New |
+|-----|-----|
+| `func Extension(phi *ext.API)` in `.go` | `phi.New` + `m.Run()` binary |
+| Drop file under `extensions/` | Directory + `phi.yaml` + binary |
+| `phi.On(ext.EventToolCall, …)` | `m.OnToolCall(…)` |
+
+## Migration from shell hooks
+
+| Old hook | Extension |
+|----------|-----------|
+| PreToolUse deny | `OnToolCall` → `Block: true` |
+| PostToolUse context | `OnToolResult` → `Context` |
+| Stop / steer | `OnTurnStopping` / `OnToolResult{Stop}` |
+| UserPromptSubmit | `OnUserInput` |
+| Command slash | `RegisterCommand` |

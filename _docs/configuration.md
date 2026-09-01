@@ -75,7 +75,7 @@ Measured data — 39 LLM rounds, same session: prompt **16k→40k**, hit rate
 ├── config.yaml   # global configuration
 ├── bin/          # downloaded search tools (fd, ripgrep)
 ├── skills/       # SKILL.md skill directories
-├── extensions/   # *.go yaegi extension files
+├── extensions/   # <name>/phi.yaml + compiled exec binaries
 ├── jobs/         # sub-agent job artifacts (meta, logs, result.md)
 └── session/      # persisted sessions, one dir per working directory
     └── <encoded-cwd>/

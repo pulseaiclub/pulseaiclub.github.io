@@ -9,28 +9,59 @@ All notable changes to phi are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.19.0] — 2026-09-01
 
 ### Added
 
-- **Yaegi extensions:** Go extensions under `~/.phi/extensions` and
-  `<cwd>/.phi/extensions` (`*.go` / `*/index.go`). Public API `ext`, runtime
-  `internal/extension`. Supports `On` events, `RegisterTool`,
-  `RegisterCommand`, session/tool lifecycle. See
+- **PXB extensions:** native binary extensions speaking a length-prefixed
+  binary protocol (`ext/pxb`) over stdin/stdout. Author SDK `ext/phi`. Layout:
+  `~/.phi/extensions/<name>/phi.yaml` + `exec`. See
   [Extensions](/docs/extensions/). Palette: **extensions → list / reload**.
   Disable with `PHI_EXTENSIONS=off`.
+- `phi plugin install <github-repo[@tag]>`: shallow-clone a GitHub repo into
+  `~/.phi/extensions/<repo>/` (requires `phi.yaml` + compiled binary).
+- Extension full chain: `user_input`, `turn_stopping`, `session_compact`
+  intercepts/events; `SubscribeEvent` with payload; `SendUserMessage` host
+  request.
+- Extension **Confirm** dialog (blocking RPC).
+- `/sessions` opens an opaque filterable session picker (Enter resumes); no
+  longer prints into the transcript.
 
 ### Changed
 
 - **Breaking:** shell `plugin.json` hooks (`internal/hooks`, `PHI_HOOKS`,
-  `.phi/hooks`) are removed. Rewrite policy as Go extensions (migration table
-  in [Extensions](/docs/extensions/)).
+  `.phi/hooks`) are removed. Rewrite policy as extensions (migration table in
+  [Extensions](/docs/extensions/)).
+- **Breaking:** yaegi-interpreted `.go` extensions are no longer loaded.
+  Migrate to PXB binaries + `phi.yaml`.
 - TUI: `agent_spawn` / `agent_wait` tool rows show role in the detail line (`explore · …`).
 
 ### Removed
 
+- Extension **ShowPane** / **UpdatePane** / **ClosePane** / `OnPaneAction`.
+  Prefer Ctrl+K-style overlays for list UIs.
 - Shell hook plugins (`plugin.json` + `type: "command"`), `doc/hooks.md`, and
   related TUI **hooks →** commands.
+- Yaegi extension loader (`github.com/pulseaiclub/yaegi` dependency).
+
+### Fixed
+
+- `/resume` closes the previous extension runner and rebinds host UI (was
+  leaking subprocesses and dropping Notify/Confirm).
+- Controller `Close` and headless `phi run` shut down extension subprocesses;
+  TUI defers `ctrl.Close()` on exit.
+- Extension `Notify` / status frames now reach the TUI (`Proc.onNotify` wired
+  in `Runner.Bind`).
+- Slash-command `Submit` from PXB `CommandResponse` is delivered to the composer.
+- Extension handshake registration respects the handshake timeout (no longer
+  only checked between blocking reads).
+- `session_before_switch` toast without cancel is published (previously only
+  on deny).
+- SDK command handlers receive a usable `ctx.UI` (maps to `Notify` / `SetStatus`).
+- `OnToolResult.Stop` now ends the agent loop (was discarded in the executor).
+- Duplicate `turn_end` from the TUI controller removed (engine owns turn indices).
+- Session ID / previous / target fields ride on lifecycle `EventNotify`; host
+  pushes `SessionMeta` after `/new` / `/resume`.
 
 ## [0.18.1] — 2026-08-28
 

@@ -101,7 +101,7 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
       <div class="feature-card">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 8V6A1.5 1.5 0 0 1 5 4.5z"/><path d="M5 14.5h14a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18v-2a1.5 1.5 0 0 1 1.5-1.5z"/></svg></span>
         <h3>Skills &amp; extensions</h3>
-        <p>Package reusable procedures as <code>SKILL.md</code>; extend phi with Go — tools, commands, and event handlers loaded by yaegi.</p>
+        <p>Package reusable procedures as <code>SKILL.md</code>; extend phi with native binaries — tools, commands, and event handlers via the PXB protocol.</p>
       </div>
     </div>
   </div>

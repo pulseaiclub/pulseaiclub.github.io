@@ -9,7 +9,7 @@ Sessions persist automatically per working directory under
 `~/.phi/session/<encoded-cwd>/` as JSONL trajectories.
 
 - `phi sessions list` — list session id, mtime, and preview for the current directory
-- `/sessions` in the TUI — same, in-app
+- `/sessions` in the TUI — opens a filterable session picker (Enter resumes), no longer prints into the transcript
 - `/resume <id>` — continue a session (id or unique prefix)
 - `/clear` — start a fresh session (new id, empty transcript)
 - `phi run --session <id>` / `phi run --continue-last` — resume headlessly
