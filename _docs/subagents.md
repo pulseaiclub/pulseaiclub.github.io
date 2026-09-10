@@ -22,12 +22,38 @@ Sub-agents use a **role** that scopes their tools:
 
 | Role | Tools | Use for |
 |------|--------|---------|
-| `explore` | read-only (+ allowlisted bash) | Search / map structure |
-| `review` | read-only (+ allowlisted bash) | Diffs / checks; no edits |
-| `worker` | full tools except nesting | Planned, independent edits |
+| `explore` | no write/edit; bash except hard denies | Multi-hop recon / map structure |
+| `review` | same as explore | Diffs / checks; report only |
+| `worker` | full tools except nesting; bash except hard denies | Scoped, self-contained edits |
 
-Default stays `explore` (read-only). Prefer `worker` only after the parent has
-a concrete plan.
+Sub-agents run their own permission gate with bash defaulting to allow (the hard
+deny list still applies, including piping into `sh` / `bash`), so `explore` /
+`review` / `worker` can run non-allowlisted shell (`make`, pipelines, tests)
+without an Ask → Deny fold.
+
+Default stays `explore` (no edits). Prefer `worker` when the task is to
+implement a scoped change in an isolated context.
+
+Up to **4** sub-agents run concurrently; spawning more fails outright (no
+queue), so `agent_wait` on a running job before launching another.
+
+## Per-role models
+
+Optionally pin a model per role, so cheap recon and strong implementation can
+coexist in one session:
+
+```yaml
+agents:
+  enabled: true
+  models:                  # optional; omitted roles inherit the parent model
+    explore: cheap-model
+    review: strong-model
+    worker: coding-model
+```
+
+Switch for the current session only via the palette: settings → agents → models
+→ `explore` / `review` / `worker`. `(inherit parent)` clears the override. Like
+settings → model, this is session-only and does not write `config.yaml`.
 
 ## Job artifacts
 

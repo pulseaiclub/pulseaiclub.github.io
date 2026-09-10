@@ -20,11 +20,12 @@ and per-language syntax highlighting. Structural markers (`#`, backticks,
 ## Editor
 
 - `@` — fuzzy file mention picker (type `@` and start typing a path)
-- `/` — slash command picker (`/sessions`, `/resume`, `/clear`)
+- `/` — slash command picker (`/sessions`, `/resume`, `/clear`, `/diff`)
 - `?` — shortcut help picker (lists `/`, `!`, `@`, and key bindings; `Esc` closes)
 - `!command` — run a shell command locally and stream its output into the
   transcript (see [Commands](#commands))
-- `Ctrl+K` — command palette: settings → model / theme / permissions / agents, skills, extensions
+- `Ctrl+K` — command palette: settings → model / theme / permissions / agents
+  (incl. per-role models), skills, extensions
 
 ## Keyboard shortcuts
 
@@ -38,7 +39,7 @@ and per-language syntax highlighting. Structural markers (`#`, backticks,
 | `Ctrl+U` | Clear the composer input, images, and skills |
 | `Ctrl+Shift+C` | Copy the selected transcript text |
 
-Themes: `Dark`, `Darcula`, `Pink`, and `Terminal` (default), switchable from
+Themes: `Dark` (default), `Darcula`, `Pink`, and `Terminal`, switchable from
 the palette under settings → theme.
 
 ## Commands
@@ -53,8 +54,30 @@ the palette under settings → theme.
 | `/sessions` | List sessions for this directory (TUI) |
 | `/resume <id>` | Resume a session by id or unique prefix (TUI) |
 | `/clear` | Start a fresh empty session (TUI) |
+| `/diff` | Full-screen git review (working tree) |
+| `/diff staged` | Review staged changes |
+| `/diff HEAD` | Review the last commit (`git show`) |
 | `!command` | Run a shell command locally, stream output into the transcript; `Esc` cancels it |
 
 In the TUI, `!command` runs locally via `bash -c` — outside the agent loop. It
 doesn't count toward agent busy state, and the running command can be cancelled
 with `Esc` without touching an in-flight agent turn.
+
+## Diff review
+
+`/diff` opens a full-screen git review inside the TUI — read the change, leave
+line notes, then hand them to the agent without leaving the terminal.
+
+![phi diff review](/assets/img/diff.png)
+
+| Command | What opens |
+| --- | --- |
+| `/diff` | Working tree (`git diff`) |
+| `/diff staged` | Staged changes |
+| `/diff HEAD` | Last commit (`git show`) |
+
+The slash picker inserts `/diff ` with a trailing space (same pattern as
+`/resume`); submit to open. Inside the overlay: `j` / `k` move, `s`
+toggles side-by-side, `i` adds or edits a note, `x` deletes, `a` sends the
+notes to the agent, `?` shows help, `q` / `Esc` close. Notes autosave under
+`.phi/review.json`.

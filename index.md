@@ -85,6 +85,11 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
         <h3>Permission gate</h3>
         <p>Gate or Ask before destructive tools fire. Safety is not optional when an agent can touch your tree.</p>
       </div>
+      <div class="feature-card">
+        <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg></span>
+        <h3>In-TUI diff review</h3>
+        <p>Open <code>/diff</code> to review the working tree, staged changes, or the last commit — leave line notes, then send them to the agent.</p>
+      </div>
 
       <div class="feature-card">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5V7a6 6 0 0 1 12 0v2.5"/><rect x="4.5" y="9.5" width="15" height="11" rx="2.5"/><path d="M12 12.5v3"/></svg></span>

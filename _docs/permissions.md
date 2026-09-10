@@ -32,11 +32,15 @@ permissions:
 ```
 
 `bash.default` / `bash.allow` / `bash.deny` use exact command prefix matching.
-Global keys:
+The hard deny list also blocks piping into `sh` / `bash`. Global keys:
 
 - `workspace_only_writes` (default `true`)
 - `ask_timeout_sec`
 - `dangerously_allow_all` (default `false`)
+
+Sub-agents run a child gate with `bash.default: allow` (the hard deny list still
+applies), so spawned `explore` / `review` / `worker` jobs can run
+non-allowlisted shell without folding Ask → Deny. See [Sub-agents](/docs/subagents/).
 
 ## TUI approval dialog
 

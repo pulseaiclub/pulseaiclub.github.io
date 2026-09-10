@@ -17,8 +17,9 @@ cmd/main.go
   └─ editor.NewEditor(app, bus, ctrl, …)
        ├─ TranscriptPane   snap, list, mapper, subagents, welcome, text selection
        ├─ ComposerPane     chat, @/slash pickers, palette (input only)
-       ├─ FooterChrome     activity, spinner, tokens, update hint, extension status
+       ├─ FooterChrome     status slot (activity↔tokens), bottom row for ext/jobs/hints
        ├─ Overlays         permission ask, continue ask
+       ├─ DiffPane         full-screen git diff review (`/diff`)
        └─ Submitter        submit / cancel / slash / bash → Controller
 ```
 
@@ -47,6 +48,7 @@ internal/tui/
 ├── composer/               # ComposerPane, Wire(), Input iface
 ├── footer/                 # FooterChrome, token label helpers
 ├── overlays/               # permission + continue ask
+├── diffpane/               # git diff review overlay (`/diff`)
 ├── submit/                 # Submitter, BashRunner
 ├── commands/               # registry, builtins, SessionCommands, ExtCommands
 └── pathutil/               # short path + git branch labels
@@ -58,14 +60,14 @@ internal/tui/
 | `controller` | `Controller` runs `agent.Engine`; publishes `Msg` to the bus only |
 | `transcript` | Projects `session.Event` → message list; sub-agent rows; copy selection |
 | `composer` | Keyboard routing for chat, `/` slash, `@` mention, Ctrl+K palette |
-| `footer` | Spinner, activity line, token/context labels, update hint, extension status |
+| `footer` | Composer status slot (activity ↔ tokens), bottom footer row (ext status, jobs, update hint) |
 | `overlays` | Modal permission / continue-ask panels; replaces composer when active |
 | `submit` | User submit path: agent prompt, slash commands, `!bash`, cancel |
 | `commands` | Slash/palette registry; session load/clear; extension command bridge |
 | `pathutil` | Cwd shortening and git branch labels for composer chrome |
 
 Dumb rendering widgets stay in `internal/components/` (chat, input, palette,
-mention, transcript blocks, …).
+mention, transcript blocks, diffview, …).
 
 ## Assembly (`cmd/main.go`)
 
@@ -88,7 +90,7 @@ app.Run(ui)
 Inside `NewEditor`, the `CommandRegistry` (builtins) is built first, then
 panes in dependency order:
 
-1. `FooterChrome` — spinner + activity (needs `contextWindow`)
+1. `FooterChrome` — status slot + bottom footer row (needs `contextWindow`)
 2. `TranscriptPane` — shares footer spinner; usage callback → footer tokens
 3. `ComposerPane` — chat chrome; footer binds composer for labels
 4. `Overlays` — permission/continue UI; uses footer activity + composer focus
@@ -137,8 +139,8 @@ stream events; one armed wake can cover many publishes until the next `Drain`.
 | ---------------- | ------- |
 | `SessionEventMsg`, `JobProgressMsg` | `TranscriptPane` (in `drainBus`) |
 | `SubmitMsg`, `CancelStreamMsg` | `Submitter` |
-| `PermissionAskMsg`, `PermissionDismissMsg`, `ContinueAskMsg`, `ContinueDismissMsg` | `Overlays` |
-| `SetActivityMsg`, `ClearIfActivityMsg`, `UpdateAvailableMsg`, `ExtSessionEffectsMsg` | `FooterChrome` |
+| `OverlayMsg` (permission / continue / ext-confirm ask+dismiss) | `Overlays` |
+| `FooterMsg` (activity / clear-if / update hint) | `FooterChrome` |
 | `MentionResultsMsg`, `BranchLabelMsg` | `ComposerPane` |
 | `ToastMsg` | `Editor` toast overlay |
 | `ExtCommandResultMsg` | `ExtCommands` |
@@ -155,7 +157,7 @@ User Enter in composer
        ├─ "!cmd" prefix  → BashRunner (local shell, SessionEventMsg for output)
        ├─ "/slash"       → CommandRegistry / SessionCommands / ExtCommands
        └─ plain text     → Controller.Submit → agent.Engine.Loop (background)
-                              └─ SessionEventMsg, SetActivityMsg, PermissionAskMsg, …
+                              └─ SessionEventMsg, FooterMsg, OverlayMsg, …
 ```
 
 `Submitter` clears composer input after slash/bash; agent submit passes
@@ -169,7 +171,7 @@ Controller.runLoop
   → bus.Publish(SessionEventMsg{Event})
   → drainBus: TranscriptPane.ApplySession
   → TranscriptPane.Sync (mapper + subagent store)
-  → FooterChrome.SyncFromSnap (tokens / context window)
+  → FooterChrome.SyncFromSnap (activity / status slot)
   → stick-to-bottom if user was pinned
 ```
 
@@ -182,17 +184,17 @@ when the tree is unchanged.
 Esc / composer cancel
   → CancelStreamMsg
   → Submitter.Cancel → Controller cancels stream context
-  → ClearIfActivityMsg when activity was cancelled
+  → FooterMsg{Kind: FooterClearIfActivity} when activity was cancelled
 ```
 
 ### 4. Permission / continue ask
 
 ```text
 Engine needs approval
-  → Controller publishes PermissionAskMsg (or ContinueAskMsg)
+  → Controller publishes OverlayMsg (permission / continue / ext-confirm ask)
   → Overlays.Apply → replaces composer bottom panel
   → user keys → Overlays → Controller reply channel
-  → PermissionDismissMsg / ContinueDismissMsg
+  → OverlayMsg dismiss Kind on timeout/cancel
 ```
 
 Composer input is blocked while an overlay is active (`OverlayBlocksComposer`).
@@ -208,14 +210,14 @@ Composer input is blocked while an overlay is active (`OverlayBlocksComposer`).
 ```
 
 `commandBridge` in `editor` builds `commands.CommandContext` for builtins
-(model switch, theme, permissions, copy last message, …).
+(model switch, theme, permissions, agents on/off + per-role models, …).
 
 ### 6. Background chrome
 
 | Source | Msg | Target |
 | ------ | --- | ------ |
 | `StartBranchWatch` | `BranchLabelMsg` | composer bottom-right label |
-| `StartUpdateCheck` | `UpdateAvailableMsg` | footer update hint |
+| `StartUpdateCheck` | `FooterMsg` (update available) | footer update hint |
 | Extension session lifecycle | `ExtSessionEffectsMsg` | footer status + toast |
 
 ## Layering vs `internal/components`

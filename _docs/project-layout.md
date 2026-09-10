@@ -8,11 +8,11 @@ order: 13
 | Path | Purpose |
 | ------------------------ | ---------------------------------------------- |
 | `cmd/` | Entry points (`main.go` via pli: `phi run`, `phi update`, `phi sessions`, …) |
-| `ext/` | Public extension API, PXB protocol (`ext/pxb`), author SDK (`ext/phi`) |
+| `ext/` | Public extension API — nested Go module `github.com/pulseaiclub/phi/ext/go` (`ext/go/pxb` protocol, `ext/go/phi` SDK) plus the `ext/rust` crate |
 | `internal/util/update/` | Self-update check + GitHub Releases install |
 | `internal/agent/` | Agent engine, executor, jobs |
 | `internal/agent/prompt/` | System prompt templates + Skills/MCP catalogs |
-| `internal/components/` | TUI widgets (chat, input, palette, mention, …) |
+| `internal/components/` | TUI widgets (chat, input, palette, mention, diffview, …) |
 | `internal/llm/` | LLM clients (OpenAI-compatible + Anthropic), streaming, skills |
 | `internal/project/` | Workspace layout and config |
 | `internal/session/` | Session persistence, load/apply |
@@ -24,12 +24,14 @@ order: 13
 | `internal/tui/composer/` | Chat input, slash/@ pickers, palette |
 | `internal/tui/footer/` | Activity spinner, token labels, update hint |
 | `internal/tui/overlays/` | Permission / continue-ask panels |
+| `internal/tui/diffpane/` | Git diff review overlay (`/diff`) |
 | `internal/tui/submit/` | Submit, cancel, slash dispatch, bash runner |
 | `internal/tui/commands/` | Slash/palette registry, session/extension commands |
 | `internal/tui/pathutil/` | Cwd + git branch path labels |
 | `internal/tui/controller/` | Engine lifecycle, Bus/Msg, activity |
 | `internal/version/` | Build-time `Version` (splash / `phi update`) |
 | `internal/util/` | Shared helpers (diff, retry, SSE, file search, …) |
+| `internal/util/diffreview/` | Unified-diff parse/render, review comments, git load |
 | `internal/permission/` | Permission policy and ask gate |
 | `internal/extension/` | PXB extension discover/spawn/runner |
 | `internal/mcp/` | MCP config + stdio client + pool (meta-tool route) |
@@ -41,3 +43,4 @@ order: 13
 | [Extensions](/docs/extensions/) | Extensions: discover, API, events, migration from hooks |
 | [MCP](/docs/mcp/) | MCP: zero schema pollution, meta-tools, config, CLI |
 | [TUI architecture](/docs/tui-architecture/) | TUI: package layout, aggregation, interaction flows |
+| [Session context building](https://github.com/pulseaiclub/phi/blob/main/doc/session-context-building.md) | Sessions: tree model, compaction, context building |

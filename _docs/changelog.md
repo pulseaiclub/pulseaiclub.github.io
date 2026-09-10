@@ -9,6 +9,208 @@ All notable changes to phi are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] — 2026-09-10
+
+### Added
+
+- **`/diff`:** full-screen git diff review (working tree / staged / HEAD),
+  line notes in `.phi/review.json`, `a` sends notes to the agent. See
+  [Interactive mode](/docs/tui/#diff-review).
+- Extensions: `ToolResult.Expanded` opens the TUI tool row by default (e.g. plan
+  body). User toggle still wins after the first interaction.
+- CI / `make lint-markdown`: markdownlint on `**/*.md`.
+
+### Fixed
+
+- Compaction file-op details are a typed `session.CompactionDetails` (not `any`),
+  so persist/reload and later compact rounds keep prior read/modified files.
+- `/diff`: cursor movement no longer leaves a blue trail on swept rows; help
+  overlay no longer fills with selection background. Notes autosave; drop
+  unused GitHub-shaped comment fields and the redundant `w` save key.
+
+## [0.25.1] — 2026-09-10
+
+### Fixed
+
+- MCP HTTP transport: SSE bodies that interleave server notifications
+  (e.g. `notifications/message` log frames, no `id`) before the JSON-RPC
+  response frame now resolve to the response frame instead of the first
+  parseable frame, which previously made `tools/call` return an empty result
+  when a server streams log frames before answering.
+- Preserve Unicode when copying TUI text to the Windows clipboard.
+
+## [0.25.0] — 2026-09-09
+
+### Added
+
+- Sub-agents: optional per-role model defaults in `agents.models` (`explore` /
+  `review` / `worker`). Palette: settings → agents → models → role → model
+  (session-only; `(inherit parent)` clears). Omitted roles inherit the parent
+  model. See [Sub-agents](/docs/subagents/#per-role-models).
+
+### Changed
+
+- Sub-agents: child gates use `BashDefault=Allow` (hard deny list still
+  applies), so explore/review/worker can run non-allowlisted shell (`make`,
+  pipelines, tests) without Ask→Deny folding. Hard deny now also blocks piping
+  into `sh`/`bash`.
+
+### Fixed
+
+- Agent: mid-loop context-window overflow (`prompt is too long` and similar
+  provider errors) now force-compacts once and retries the stream instead of
+  failing the turn cold. A second overflow still fails closed.
+- Config: `agents.enabled` omitted under an `agents:` block (e.g. only
+  `agents.models` set) no longer decodes as false; default stays on.
+
+## [0.24.0] — 2026-09-08
+
+### Added
+
+- Extensions: tools can be marked `Readable` (side-effect-free) via the Go SDK
+  `Tool.Readable` or the Rust SDK `Tool::readable()`; the host surfaces it as
+  `Definition.Readable`, so a batch of all-readable calls — including extension
+  tools — runs concurrently.
+
+### Changed
+
+- Agent: when every tool call in a turn targets a read-only tool
+  (`Definition.Readable` — read/grep/ls/find), the calls now execute
+  concurrently; results keep call order, and any write-capable call in the
+  batch falls back to sequential execution.
+- Rust SDK (`ext/rust`): tool `execute` handlers can now be async
+  (`Tool::new_async`) — the SDK drives them to completion on a single-threaded
+  tokio runtime, so network / IO calls work without blocking tricks; sync
+  `Tool::new` handlers are unchanged.
+- LLM provider errors now read as one compact line — e.g. `anthropic API error
+  (400): prompt is too long` — using the provider's own message instead of a
+  raw JSON body, which can no longer flood the terminal or session history.
+- TUI: assistant blocks that end in error state render their body in red under
+  an `Error:` label, so failures read like tool errors.
+
+## [0.23.0] — 2026-09-07
+
+### Added
+
+- Gemini endpoints (Google AI Studio / Vertex AI): streaming chat and
+  compaction with tool calling, image input, system prompts, and model thinking
+  surfaced as reasoning.
+- `phi plugin list` / `phi plugin update [repo[@ref]] [--check]` /
+  `phi plugin remove <repo>` (alias `rm`): audit and update extensions without
+  manual removal. Install records the GitHub source in
+  `~/.phi/extensions/<repo>/.phi-install.json`; `update` re-resolves that
+  source and swaps the directory atomically (release archive preferred, git
+  clone fallback, pinned tags stay pinned unless overridden). Extensions not
+  installed via `phi plugin install` are left untouched.
+
+### Changed
+
+- Rust SDK (`ext/rust`): tool-schema and confirm-dialog JSON now serializes
+  with `serde`/`serde_json` instead of hand-rolled writers (wire output
+  unchanged; `preserve_order` keeps key order).
+
+### Fixed
+
+- Fix PowerShell installer parsing of checksum mismatch errors.
+- Extension footer status (e.g. plan-mode hints) is reset when extensions are
+  reloaded or the model is switched, so stale text no longer outlives the
+  extension subprocess.
+
+## [0.22.0] — 2026-09-04
+
+### Changed
+
+- TUI: composer bottom-left status slot now toggles between activity/spinner
+  (busy) and token stats (idle); busy state animates a highlight through the
+  activity text (no block-glyph scan bar); the bottom footer row is reserved
+  for extension status, live jobs, and update hints.
+- TUI: chat-input border chrome speaks one ambient voice (path, idle tokens,
+  activity); model Identity remains the sole frame accent; context % escalates
+  to Warning/Destructive only under pressure.
+- TUI color dialect: Identity ≠ Success; Title for panel/md structure; ToolName
+  is the sole cool action accent (tools, keybinds, paths, code);
+  Warning/Destructive reserved for risk; default theme is Dark (Terminal stays
+  a compatibility option).
+
+## [0.21.1] — 2026-09-03
+
+### Added
+
+- Slash commands can declare `NeedsArgs` (Go) / `needs_args` (Rust). Picker
+  accept or bare submit of `/name` leaves `/name` plus a trailing space in the
+  composer so the user can type arguments instead of auto-running and toasting
+  usage. Built-in `/resume` uses this.
+
+### Changed
+
+- Go author SDK nested module now publishes under
+  `github.com/pulseaiclub/phi/ext/go` (imports `…/ext/go/phi`,
+  `…/ext/go/pxb`; tags `ext/go/vX.Y.Z`), matching its repo location `ext/go/`
+  so proxies can resolve it.
+
+### Fixed
+
+- Publish Rust crate workflow: write `exists` to `$GITHUB_OUTPUT` so
+  `cargo publish` actually runs when the version is new.
+
+## [0.21.0] — 2026-09-03
+
+### Added
+
+- Extension tools can set `DetailFromArgs` (Go) / `detail_from_args` (Rust) so
+  the TUI shows a one-line summary instead of raw JSON args before execution.
+- `phi plugin install` prefers a GitHub Release archive for the current OS/arch
+  (`{repo}_{version}_{goos}_{goarch}.tar.gz`, same layout as `phi update`), with
+  optional checksum verification; falls back to shallow git clone when no
+  matching asset exists.
+
+## [0.20.0] — 2026-09-02
+
+### Added
+
+- Extension tools can set `TimeoutSec` (Go SDK) / `timeout_sec` (Rust SDK) so
+  the host waits longer than the default 30s RPC budget for slow tools (e.g.
+  HTTP fetch). Clamped to 1–3600s.
+- Rust SDK: typed `phi::Schema` builder for tool parameters (replaces raw
+  `Vec<u8>`), staying zero-dep instead of Codex-style `schemars`.
+
+### Changed
+
+- TUI chrome consistency: shared glyph/hint dialect
+  (`internal/components/chrome`), unified ask/continue/confirm option rows,
+  `Theme.Identity` for model/user/bash chrome (separate from Success status),
+  and aligned transcript expand indent / status suffixes. Permission/continue/
+  confirm overlays navigate with arrows only (no Alt+N accelerators). Sessions
+  list picker uses a wider panel (~90% / up to 112 cols) so previews truncate
+  less.
+
+### Removed
+
+- Palette command `clipboard copy last message` (`Ctrl+Shift+C`); the key chord
+  still copies selection / last message via the transcript handler.
+
+## [0.19.2] — 2026-09-02
+
+### Added
+
+- Rust author SDK: zero-dependency `ext/rust` crate (`phi-ext`) — PXB wire
+  protocol (`pxb`) + `Extension` API (`phi`), byte-compatible with the Go SDK
+  via golden fixtures, plus fake-host end-to-end tests. See
+  [Extensions](/docs/extensions/).
+
+## [0.19.1] — 2026-09-01
+
+### Added
+
+- Publishable Go author SDK: nested module `github.com/pulseaiclub/phi/ext`
+  (`go get …@vX.Y.Z` via `ext/vX.Y.Z` tags). See
+  [Extensions](/docs/extensions/).
+
+### Fixed
+
+- Extension discovery follows symlinked directories (e.g. `.phi/extensions/foo`
+  → `examples/foo`), so linked installs are no longer skipped.
+
 ## [0.19.0] — 2026-09-01
 
 ### Added

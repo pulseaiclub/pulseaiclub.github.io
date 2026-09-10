@@ -28,7 +28,10 @@ skill_path: ~/.phi/skills # where SKILL.md files are loaded from
 
 agents:
   enabled: true           # default; set false to disable agent_* sub-agent tools
-
+  models:                 # optional per-role defaults; omit → inherit parent model
+    explore: cheap-model
+    review: strong-model
+    worker: coding-model
 permissions:
   mode: interactive       # interactive | readonly | autopilot | headless-strict
   bash:
