@@ -5,7 +5,7 @@ group: Get started
 order: 1
 ---
 
-phi is a minimal terminal coding agent harness in Go — a sibling to Pi. It gives
+phi is a minimal terminal coding agent harness in Go. It gives
 the model a small set of tools (`read`, `write`, `edit`, `bash`, …) behind a
 permission gate, keeps sub-agent work out of the parent context, and never lets
 MCP schemas pollute the prompt.
@@ -77,10 +77,10 @@ macOS arm64 unless noted.
 
 | Metric | phi |
 | --- | ---: |
-| Release binary | **~12 MB** |
+| Release binary | **~15 MB** |
 | Idle RSS (1 session) | **~21 MB** |
-| 10 idle sessions (total RSS) | **~196 MB** (~20 MB each) |
-| Time to first frame | **~40 ms** (27–65 ms) |
+| 10 idle sessions (total RSS) | **~221 MB** |
+| Time to first frame | **~31 ms** (26–49 ms) |
 | Cold `go build` (empty `GOCACHE`) | **~5.5 s** |
 | Warm rebuild | **~0.7 s** |
 | Go source (excl. tests) | **~22k LOC** / 107 files |

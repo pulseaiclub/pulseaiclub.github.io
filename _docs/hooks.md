@@ -1,6 +1,7 @@
 ---
 title: Hooks
 description: The shell hooks system was removed in favor of PXB native extensions.
+group: Extending
 order: 9
 ---
 

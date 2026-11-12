@@ -14,9 +14,14 @@ by default and ask before anything destructive. Configure it under
 | Mode | Behavior |
 | ------------------ | --------------------------------------------------- |
 | `interactive` | Default. `ask` decisions prompt in the TUI. |
-| `readonly` | Deny writes / bash; read tools still work. |
-| `autopilot` | Fold `ask` → allow, run unattended. |
+| `readonly` | Deny writes and `ask`; policy-allowed bash still runs. |
+| `autopilot` | Fold `ask` → deny (same as `headless-strict` today). |
 | `headless-strict` | Fold `ask` → deny (used by `phi run`). |
+| `allow-all` | Skip every permission check. |
+
+`readonly` does not block every bash command: a command the underlying policy
+allows (`bash.allow`, or `bash.default: allow`) still runs after the deny list
+is checked. Writes, other `ask` decisions, and `agent_spawn` are denied.
 
 ## Per-tool rules
 
@@ -31,12 +36,45 @@ permissions:
       - "rm -rf *"
 ```
 
-`bash.default` / `bash.allow` / `bash.deny` use exact command prefix matching.
-The hard deny list also blocks piping into `sh` / `bash`. Global keys:
+`bash.default` / `bash.allow` / `bash.deny` match against the command. The
+hard deny list also blocks piping into `sh` / `bash`. Global keys:
+`workspace_only_writes` (default `true`) and `ask_timeout_sec`. The deprecated
+`dangerously_allow_all: true` still loads as `mode: allow-all` and is dropped
+on the next save; `phi run --yolo` maps to the same mode.
 
-- `workspace_only_writes` (default `true`)
-- `ask_timeout_sec`
-- `dangerously_allow_all` (default `false`)
+## Custom rules
+
+`permissions.rules` adds your own rules by tool, kind, command, path, or
+workspace scope:
+
+```yaml
+permissions:
+  rules:
+    - tool: "mcp__*"          # exact name or glob
+      kind: read
+      decision: ask
+      reason: "external lookup: %s"
+
+    - path:                   # filesystem prefixes, "~" is expanded on load
+        - "~/.ssh"
+      decision: deny
+
+    - kind: exec
+      command: "^git push"    # regex against the whole command
+      decision: ask
+      reason: "pushing needs a human"
+
+    - kind: write
+      scope: outside-workspace
+      decision: deny
+```
+
+Rules are evaluated **strictest-first** (`deny` > `ask` > `allow`), so a rule
+can tighten a policy but never loosen one. An allowlist entry only fires on a
+single simple command — `^ls\b` does not license `ls && rm -rf …`. Paths are
+resolved through symlinks before any rule sees them, so a link inside the
+workspace cannot smuggle a write outside it. Full semantics:
+[doc/permissions.md](https://github.com/pulseaiclub/phi/blob/main/doc/permissions.md).
 
 Sub-agents run a child gate with `bash.default: allow` (the hard deny list still
 applies), so spawned `explore` / `review` / `worker` jobs can run

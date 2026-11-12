@@ -1,7 +1,7 @@
 ---
 layout: home
 title: phi
-description: phi is a minimal terminal coding agent harness in Go — sub-agents, hashline edits, a permission gate, and MCP without context death.
+description: phi is a minimal terminal coding agent harness in Go — sub-agents, anchored edits, a permission gate, and MCP without context death.
 ---
 
 <section class="hero">
@@ -11,8 +11,8 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
 
       <h1 class="hero-title">A minimal <span class="hero-accent">terminal</span> coding agent harness.</h1>
       <p class="hero-sub">
-        Sub-agents, hashline edits, a permission gate, and MCP without context death —
-        in a ~12&nbsp;MB binary that stays out of your way.
+        Sub-agents, anchored edits, a permission gate, and MCP without context death —
+        in a ~15&nbsp;MB binary that stays out of your way.
       </p>
 
       <div class="hero-cta">
@@ -76,8 +76,8 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
 
       <div class="feature-card">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4l-1 7h4l-1 9"/><path d="M4.5 9.5h15M3.5 14.5h15"/></svg></span>
-        <h3>Hashline edits</h3>
-        <p>Edit by <code>@file#TAG</code> and <code>LINE#HASH</code> anchors instead of rewriting whole files; stale anchors are rejected.</p>
+        <h3>Anchored sloppy edits</h3>
+        <p>Edit by anchored <code>SM:FIND</code>/<code>SM:PUT</code> patches instead of rewriting whole files; missing or ambiguous anchors fail closed with copy-ready fixes.</p>
       </div>
 
       <div class="feature-card">
@@ -100,7 +100,7 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
       <div class="feature-card">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3.5 12.5L12 17l8.5-4.5"/><path d="M3.5 16.5L12 21l8.5-4.5"/></svg></span>
         <h3>Any model</h3>
-        <p>OpenAI-compatible or Anthropic — no vendor lock-in, switch models at runtime.</p>
+        <p>OpenAI, Anthropic, or Gemini — no vendor lock-in, switch models at runtime.</p>
       </div>
 
       <div class="feature-card">
@@ -118,9 +118,9 @@ description: phi is a minimal terminal coding agent harness in Go — sub-agents
     <h2 class="section-title">Cheap to run, cheap to hack on.</h2>
 
     <div class="stats-grid">
-      <div class="stat"><span class="stat-num">~12 MB</span><span class="stat-label">release binary</span></div>
+      <div class="stat"><span class="stat-num">~15 MB</span><span class="stat-label">release binary</span></div>
       <div class="stat"><span class="stat-num">~21 MB</span><span class="stat-label">idle RSS per session</span></div>
-      <div class="stat"><span class="stat-num">~40 ms</span><span class="stat-label">time to first frame</span></div>
+      <div class="stat"><span class="stat-num">~31 ms</span><span class="stat-label">time to first frame</span></div>
       <div class="stat"><span class="stat-num">6</span><span class="stat-label">direct module deps</span></div>
       <div class="stat"><span class="stat-num">~22k LOC</span><span class="stat-label">Go source, 32 packages</span></div>
       <div class="stat"><span class="stat-num">0</span><span class="stat-label">Node / Electron / Python runtimes</span></div>

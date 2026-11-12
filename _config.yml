@@ -2,7 +2,7 @@
 title: phi
 tagline: A minimal terminal coding agent harness in Go
 description: >-
-  phi is a minimal terminal coding agent harness in Go — sub-agents, hashline
+  phi is a minimal terminal coding agent harness in Go — sub-agents, anchored
   edits, a permission gate, and MCP without context death.
 
 url: "https://pulseaiclub.github.io"

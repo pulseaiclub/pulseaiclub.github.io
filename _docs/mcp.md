@@ -16,23 +16,27 @@ tokens before you ask a question.
 
 | Pain | Typical MCP host | phi |
 | --- | --- | --- |
-| Context | All schemas injected at startup | Model sees only three meta-tools |
+| Context | All schemas injected at startup | Model sees zero extra tools; URLs ride `ls` / `read` / `write` |
 | Many servers | Uninstall / reload Tetris | Always configured; call on demand |
-| Permissions | Separate system or wide open | Same Gate / Ask / Extensions as builtins |
+| Permissions | Separate system or wide open | Browsing is read-tier; calls go through the write Gate / Ask / Extensions |
 | Footprint | Heavy SDKs, always-on processes | Hand-rolled Go stdio client, lazy start |
 
-Agent-facing tools:
+MCP is a **URL namespace**, not a tool set. The regular tools gain `mcp://`
+superpowers:
 
-- `mcp_list` — list tool **names** on one server (compact text)
-- `mcp_inspect` — slim parameter summary for one tool
-- `mcp_call` — actually invoke
+| Action | Call |
+| --- | --- |
+| List servers | `ls mcp://` |
+| List tools on a server | `ls mcp://<server>/tools/` |
+| Inspect one tool's params | `read mcp://<server>/tools/<tool>` |
+| Invoke a tool | `write mcp://<server>/tools/<tool>` with content = JSON argument object |
 
 Configured **server names** are listed in the system prompt (like Skills), so
-the model knows what exists without calling `mcp_list` first. Schemas still
-stay out of context.
+the model knows what exists without listing first. Schemas still stay out of
+context.
 
-Typical rhythm: pick a server from the prompt → `mcp_list(server=…)` →
-`mcp_inspect` → `mcp_call`.
+Typical rhythm: pick a server from the prompt → `ls mcp://<server>/tools/` →
+`read mcp://<server>/tools/<tool>` → `write` the arguments.
 
 ## Interaction flow
 
@@ -40,14 +44,14 @@ Typical rhythm: pick a server from the prompt → `mcp_list(server=…)` →
 Start TUI / phi run
   → load ~/.phi/mcp.json + <cwd>/.phi/mcp.json
   → build Pool (no subprocess yet)
-  → tool list += mcp_list / mcp_inspect / mcp_call
+  → executor carries the Pool; no extra tools registered
   → system prompt += MCP catalog (server names only)
 
 User prompt
-  → model may call mcp_list(server=…) directly from the catalog
+  → ls mcp://<server>/tools/
   → lazy Client → spawn → initialize → tools/list → names only
-  → mcp_inspect → compact param summary
-  → mcp_call → Executor → ExtensionPre → Gate → tools/call → result to model
+  → read mcp://<server>/tools/<tool> → compact param summary
+  → write mcp://… + JSON args → Executor → PreHooks → write Gate → tools/call → result to model
 ```
 
 Human CLI and the agent share the same `internal/mcp` stack:
@@ -55,11 +59,11 @@ Human CLI and the agent share the same `internal/mcp` stack:
 ```text
 phi mcp doctor|call  ──┐
                        ├──► Pool ──► Client (stdio JSON-RPC)
-model mcp_* ───────────┘
+model ls/read/write ───┘   (mcp:// URLs)
 ```
 
-Sub-agents do **not** inherit MCP meta-tools by default. Disable with
-`PHI_MCP=off`.
+Sub-agents get no MCP pool by default (their executors have none). Disable
+with `PHI_MCP=off`.
 
 ## Quick start
 
@@ -91,7 +95,7 @@ phi mcp list
 phi mcp doctor
 ```
 
-> **Note:** restart phi after config changes — the Pool loads at startup.
+**Restart phi** after config changes (Pool loads at startup).
 
 ### Migrating from Claude Desktop config
 

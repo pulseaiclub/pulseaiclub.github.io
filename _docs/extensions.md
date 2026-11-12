@@ -1,6 +1,6 @@
 ---
 title: Extensions
-description: Extend phi with native binaries — Go and Rust SDKs, tools, slash commands, and lifecycle event handlers via the PXB protocol.
+description: Extend phi with native binaries — Go, Rust, and TypeScript SDKs, tools, models, slash commands, and lifecycle event handlers via the PXB protocol.
 group: Extending
 order: 9
 ---
@@ -20,8 +20,7 @@ Shaped for subprocess PXB:
 user_input ──(transform|handled)──► before_agent_start ──► agent_start
   └─ turn_start → LLM → tool_execution_start → tool_call → Gate/Ask → Run
        → tool_result → tool_execution_end → turn_end
-  └─ (no tools) turn_stopping ──(continue+message)──► another turn
-  └─ agent_end
+  └─ (no tools) agent_end
 session_before_switch → session_shutdown → session_start
 session_compact (after auto compaction)
 ```
@@ -32,11 +31,18 @@ session_compact (after auto compaction)
 | `before_agent_start` | intercept | rewrite prompt / append context |
 | `tool_call` | intercept | block / rewrite args / context |
 | `tool_result` | intercept | rewrite content / context / **Stop** agent loop |
-| `turn_stopping` | intercept | `Continue` + steer message |
 | `session_before_switch` | intercept | cancel switch |
 | `session_*` / `agent_*` / `turn_*` / `tool_execution_*` / `session_compact` | subscribe | observe (payload via `SubscribeEvent`) |
 
 Tool loop order remains **ExtensionPre → Gate/Ask → Run → ExtensionPost**.
+
+Session lifecycle events carry a free-form `reason`. Current values:
+`session_start`: `startup`, `new`, `resume`, `fork`; `session_before_switch`:
+`new`, `resume`, `fork`; `session_shutdown`: `new`, `resume`, `fork`, `quit`.
+A fork allocates its id only after approval, so its `session_before_switch`
+carries an empty target; the id first appears on `session_shutdown`. Handlers
+that branch on `reason` should treat an unknown value as "a normal session
+switch".
 
 ## Why not JSON lines?
 
@@ -85,6 +91,17 @@ go get github.com/pulseaiclub/phi/ext/go@v0.21.0
 
 Slow tools (HTTP fetch, long builds, …) should set `TimeoutSec` — the host's
 default RPC wait is **30s**. Values are clamped to 1–3600.
+
+Cancellation or timeout of an in-flight RPC terminates the extension process,
+including its other pending calls. Reload the extension before using it again.
+This is process-level cancellation, not a cooperative cancellation signal to
+individual handlers.
+
+PXB limits each encoded payload to **16 MiB** by default. Extensions that
+advertise `CapLargeFrames` in the hello handshake can receive `ModelInvoke`
+frames up to 256 MiB, so long sessions fit an ext-served model request.
+Oversized tool results still return an explicit error; keep large output in a
+file and return a concise summary and path.
 
 Set `DetailFromArgs` so the TUI tool row shows a one-line summary (path, URL, …)
 instead of raw JSON while the tool is in progress. The host RPCs the extension
@@ -155,10 +172,6 @@ func main() {
 	})
 	m.OnToolResult(func(ev ext.ToolResultEvent) *ext.ToolResultResult {
 		// return &ext.ToolResultResult{Stop: true} to end the agent loop
-		return nil
-	})
-	m.OnTurnStopping(func(ev ext.TurnStoppingEvent) *ext.TurnStoppingResult {
-		// return &ext.TurnStoppingResult{Continue: true, Message: "check X"} to steer
 		return nil
 	})
 	m.SubscribeEvent(ext.EventSessionStart, func(ev pxb.EventNotify) {
@@ -239,10 +252,6 @@ fn main() -> Result<(), phi::Error> {
         // Some(phi::ToolResultResult { stop: true, ..Default::default() }) ends the agent loop
         None
     });
-    m.on_turn_stopping(|_ev| {
-        // Some(phi::TurnStoppingResult { continue_: true, message: "check X".into(), ..Default::default() }) steers
-        None
-    });
     m.subscribe(pxb::Event::SessionStart, |_ev| {});
     m.run()
 }
@@ -302,6 +311,85 @@ cp target/release/examples/hello phi.yaml ~/.phi/extensions/hello/
 ```
 
 Reload: **Ctrl+K → extensions → reload**.
+
+## Authoring (TypeScript SDK)
+
+Zero-dependency package under `ext/ts` (`@pulseaiclub/phi-ext`) — same wire
+protocol, same features; `Extension` / `Tool` / `Command` / `Context` /
+`Schema` mirror the Rust SDK.
+
+```ts
+import { Extension } from "@pulseaiclub/phi-ext";
+
+const m = new Extension("hello", "0.1.0");
+m.registerCommand("hello", {
+  description: "Say hi",
+  handler: async (_args, ctx) => {
+    await ctx.notify("info", "Hello!");
+  },
+});
+await m.run();
+```
+
+The manifest points at Node; sources run directly on Node ≥ 23.6 (type
+stripping), or ship a `dist/` build for older runtimes (Node ≥ 20):
+
+```yaml
+name: hello
+exec: node
+args: [dist/hello.js]
+```
+
+```bash
+cd ext/ts
+npm install && npm run build
+mkdir -p ~/.phi/extensions/hello
+cp -r dist phi.yaml ~/.phi/extensions/hello/
+```
+
+## Models from extensions
+
+Extensions can register models the host can switch to — `/model`, the startup
+palette, sub-agent role models and `agents.models` all accept them. Two
+connection methods on `RegisterModel.Conn`:
+
+- **Direct-connect** (`Conn: ""`) — the host dials `BaseURL` itself with the
+  given `api`/`api_key`, exactly like a `models[]` entry in config.yaml.
+- **Extension-served** (`Conn: ext.ConnExt`) — the extension *is* the
+  connection: each chat completion arrives as a `ModelInvoke` frame, the
+  handler streams deltas back as `ModelStreamEvent` frames, and the host
+  assembles the final assistant message.
+
+```go
+m.RegisterModel(ext.Model{
+	Name: "corp-proxy", Conn: ext.ConnExt,
+	ContextWindow: 272000, ImageEnabled: true, ThinkEnabled: true,
+	Stream: func(ctx context.Context, req ext.ModelRequest, emit func(ext.ModelEvent) error) error {
+		return emit(ext.ModelEvent{
+			Content: "hello from " + req.Model,
+			Usage:   &ext.Usage{PromptTokens: 1, CompletionTokens: 3, TotalTokens: 4},
+		})
+	},
+})
+```
+
+Contract notes:
+
+- **Deltas only.** Emit content / reasoning / tool-call fragments — never the
+  accumulated text. The host assembles the final message and attaches the
+  last `Usage` seen for context-window accounting.
+- **Cancellation is cooperative.** On Esc the host abandons the stream and
+  sends a best-effort `ModelCancel`; respect `ctx` (Go) / `AbortSignal` (TS)
+  when forwarding upstream.
+- **Precedence.** Extension model names shadow config.yaml entries with the
+  same name, and the first extension to register a name wins. Direct-connect
+  registrations need `base_url`.
+- The `/model` palette snapshots names at startup; after installing or
+  reloading a model extension, `/model <name>` works immediately, the palette
+  catches up on the next start.
+- Go, Rust and TS SDKs all expose model registration (`m.RegisterModel`,
+  `phi::Model::direct` / `Model::served`, `conn: CONN_EXT` + a `stream`
+  handler).
 
 ## Install from GitHub
 
@@ -364,7 +452,8 @@ them under management.
 | `ext/go/pxb` | Binary wire protocol |
 | `ext/go/phi` | Go author SDK (`ExtensionAPI.Run`) |
 | `ext/rust` (crate `phi-ext`) | Rust author SDK (`pxb` + `phi` modules; deps: serde/serde_json + tokio `rt`) |
-| `internal/extension` | Discover, spawn, Runner shims |
+| `ext/ts` (npm `@pulseaiclub/phi-ext`) | TypeScript author SDK (`pxb` + `phi` modules; zero runtime deps, Node ≥ 20) |
+| `internal/extension` | Host side: discover, spawn, Runner shims (`core`/`loader`/`install`/`create` layers) |
 
 ## Migration from yaegi
 
@@ -380,6 +469,6 @@ them under management.
 |----------|-----------|
 | PreToolUse deny | `OnToolCall` → `Block: true` |
 | PostToolUse context | `OnToolResult` → `Context` |
-| Stop / steer | `OnTurnStopping` / `OnToolResult{Stop}` |
+| Stop | `OnToolResult{Stop}` |
 | UserPromptSubmit | `OnUserInput` |
 | Command slash | `RegisterCommand` |

@@ -16,10 +16,11 @@ session→widget projection lives in `internal/tui/transcript`.
 cmd/main.go
   └─ editor.NewEditor(app, bus, ctrl, …)
        ├─ TranscriptPane   snap, list, mapper, subagents, welcome, text selection
-       ├─ ComposerPane     chat, @/slash pickers, palette (input only)
-       ├─ FooterChrome     status slot (activity↔tokens), bottom row for ext/jobs/hints
-       ├─ Overlays         permission ask, continue ask
+       ├─ ComposerPane     chat, @/slash/?/! pickers, palette (input only)
+       ├─ FooterChrome     bottom row for extension status and update hints
+       ├─ Overlays         permission ask, ext-confirm
        ├─ DiffPane         full-screen git diff review (`/diff`)
+       ├─ CodePane         full-screen source viewer (`/code`)
        └─ Submitter        submit / cancel / slash / bash → Controller
 ```
 
@@ -28,10 +29,12 @@ cmd/main.go
 | Owner | Composes (lifecycle) | Aggregates (injected) |
 | ----- | -------------------- | --------------------- |
 | `Editor` | all panes, `Submitter`, `toast`, `CommandRegistry` | `Bus`, `App`, `vx` |
-| `TranscriptPane` | `MessageList`, `Mapper`, `SubagentStore`, `welcome`, `textSel` | `theme`, `spinner` ref from footer |
+| `TranscriptPane` | `MessageList`, `Mapper`, `SubagentStore`, `welcome`, `textSel` | `theme`, `spinner` ref from editor |
 | `ComposerPane` | `ChatInput`, pickers, `palette` | callbacks `onSubmit`, `onCancel`, `onRedraw` |
-| `FooterChrome` | `ActivityHandler`, `Spinner` | `labelContext()`, `liveJobs()` closures |
-| `Overlays` | `permAskState`, `continueAskState` | `activity` ref, reply callbacks |
+| `FooterChrome` | drawing theme | immutable `State` passed to `Draw` |
+| `Overlays` | `permAskState`, `confirmAskState` | `activity` ref, reply callbacks |
+| `DiffPane` | review overlay (rows, notes, search) | `cwd`, submit/copy/toast callbacks |
+| `CodePane` | source overlay (lines, caret, selection) | `cwd`, add-to-chat/toast callbacks |
 | `Submitter` | `BashRunner` | `Controller`, `Bus`, `CommandRegistry`, pane refs |
 
 **Hard rule:** no `*Editor` back-pointers on handlers. Cross-domain work uses
@@ -47,10 +50,11 @@ internal/tui/
 ├── transcript/             # Mapper, SubagentStore, TranscriptPane
 ├── composer/               # ComposerPane, Wire(), Input iface
 ├── footer/                 # FooterChrome, token label helpers
-├── overlays/               # permission + continue ask
+├── overlays/               # permission + ext-confirm ask
 ├── diffpane/               # git diff review overlay (`/diff`)
+├── codepane/               # source viewer overlay (`/code`)
 ├── submit/                 # Submitter, BashRunner
-├── commands/               # registry, builtins, SessionCommands, ExtCommands
+├── commands/               # registry, builtins, SessionCommands, BranchCommands, ExtCommands
 └── pathutil/               # short path + git branch labels
 ```
 
@@ -59,15 +63,17 @@ internal/tui/
 | `editor` | TUI root `components.Widget`; wires panes; `Draw` drains the bus |
 | `controller` | `Controller` runs `agent.Engine`; publishes `Msg` to the bus only |
 | `transcript` | Projects `session.Event` → message list; sub-agent rows; copy selection |
-| `composer` | Keyboard routing for chat, `/` slash, `@` mention, Ctrl+K palette |
-| `footer` | Composer status slot (activity ↔ tokens), bottom footer row (ext status, jobs, update hint) |
-| `overlays` | Modal permission / continue-ask panels; replaces composer when active |
+| `composer` | Keyboard routing for chat, `/` slash, `?` shortcuts, `@` mention, `!` shell completion, Ctrl+K palette |
+| `footer` | Status label helpers and bottom footer row renderer |
+| `overlays` | Modal permission / ext-confirm / error panels; replaces composer when active |
+| `diffpane` | Full-screen git diff review; notes stay in memory |
+| `codepane` | Full-screen source viewer: syntax highlight, caret, line selection |
 | `submit` | User submit path: agent prompt, slash commands, `!bash`, cancel |
-| `commands` | Slash/palette registry; session load/clear; extension command bridge |
+| `commands` | Slash/palette registry; session load/new; extension command bridge |
 | `pathutil` | Cwd shortening and git branch labels for composer chrome |
 
 Dumb rendering widgets stay in `internal/components/` (chat, input, palette,
-mention, transcript blocks, diffview, …).
+mention, transcript blocks, …).
 
 ## Assembly (`cmd/main.go`)
 
@@ -79,44 +85,45 @@ proj.LoadConfig()
 vx, theme, cwd
 redraw := controller.NewRedrawRelay()
 bus    := controller.NewBus(redraw.Fire)
-ctrl   := controller.NewController(bus, proj, cwd)
-ui     := editor.NewEditor(app, bus, ctrl, vx, theme, cwd, model, skillPath, contextWindow, modelNames)
+ctrl   := controller.NewController(bus, proj)
+ui     := editor.NewEditor(app, bus, ctrl, vx, theme, cwd, model, skillPaths, contextWindow, modelNames)
 redraw.Bind(ui.RequestRedraw)
 ui.StartUpdateCheck(...)
 ui.StartBranchWatch()
 app.Run(ui)
 ```
 
-Inside `NewEditor`, the `CommandRegistry` (builtins) is built first, then
-panes in dependency order:
-
-1. `FooterChrome` — status slot + bottom footer row (needs `contextWindow`)
-2. `TranscriptPane` — shares footer spinner; usage callback → footer tokens
-3. `ComposerPane` — chat chrome; footer binds composer for labels
-4. `Overlays` — permission/continue UI; uses footer activity + composer focus
-5. `SessionCommands`, `ExtCommands`, `Submitter` (owns `BashRunner`) —
-   explicit deps, no `*Editor` fields
-6. `ComposerPane.Wire(...)` — connects composer keyboard path to submitter,
-   overlays, bus
+Inside `NewEditor`, panes are built first, then `commands.NewBuiltinRegistry`
+assembles the registry and domain handlers (`SessionCommands`, `BranchCommands`,
+`ExtCommands`, settings/skills/diff). `Builtin.Bind` attaches Submitter / pickers /
+stream guard after `Submitter` exists. `ComposerPane.Wire(...)` connects the keyboard
+path last.
 
 `Editor` does **not** call `project.GetDefaultProject` or construct
-`Controller`.
+`Controller`. It does **not** own command side effects — those live in
+`internal/tui/commands`.
 
 ## UI goroutine loop
 
 ```text
 xui event
-  └─ Editor.Handle → ComposerPane.Handle (keys, paste, focus)
-       ├─ overlay keys → Overlays (when active)
-       ├─ copy keys    → TranscriptPane
-       └─ submit       → bus.Publish(SubmitMsg)
+  └─ Editor.Handle → full-screen overlay (DiffPane / CodePane, when active)
+       └─ ComposerPane.Handle (keys, paste, focus)
+            ├─ overlay keys → Overlays (when active)
+            ├─ copy keys    → TranscriptPane
+            └─ submit       → bus.Publish(SubmitMsg)
 
 app frame
   └─ Editor.Draw
        ├─ drainBus()          # apply pending Msg batch on UI thread
+       ├─ full-screen overlay (DiffPane / CodePane) + toast
        ├─ layout: list | chat/overlay | footer
        └─ toast overlay (if visible)
 ```
+
+Both full-screen overlays (`DiffPane`, `CodePane`) are UI-goroutine objects:
+they load, handle keys and paint in one place, and their callbacks
+(add-to-chat, copy, toast) run inline — no pane state needs a lock.
 
 `RequestRedraw` → `vx.QueueRefresh()`. The bus coalesces high-frequency
 stream events; one armed wake can cover many publishes until the next `Drain`.
@@ -130,8 +137,26 @@ stream events; one armed wake can cover many publishes until the next `Drain`.
 
 | Phase | Messages | Handler |
 | ----- | -------- | ------- |
-| Batch pass | `SessionEventMsg`, `JobProgressMsg` | `TranscriptPane` → optional `Sync` + footer token refresh |
+| Batch pass | `SessionEventMsg`, `JobProgressMsg` | `TranscriptPane` → optional `Sync`; editor refreshes the status slot |
 | Per-msg | everything else | `Editor.Update` → domain handler |
+
+### Transport rules
+
+How data crosses the UI/domain boundary — one rule per direction:
+
+1. **UI goroutine → domain: direct calls.** Wiring sites pass method values
+   (`e.ctrl.ImageEnabled`, `e.overlays.ResolvePermission`), never anonymous
+   forwarding closures. When a callback needs two calls or a signature
+   adapter, it becomes a named `Editor` method (`publishToast`,
+   `copyToClipboard`) so the wiring reads as a table of collaborators.
+2. **Any goroutine → UI: `bus.Publish`.** Engine events, job progress,
+   background checks publish `Msg`s; the UI goroutine applies them in `Drain`.
+3. **Widgets stay dumb.** `internal/components` take narrow func fields /
+   interfaces; they never import domain packages. The binding happens once,
+   in `NewEditor`, as method values.
+4. **Immutable collaborators go by value.** Single-creation handles
+   (`commands.Context`, working directory) are constructor parameters, not
+   accessor funcs — a `func() X` implies it can change or is computed.
 
 ### Message routing
 
@@ -139,12 +164,12 @@ stream events; one armed wake can cover many publishes until the next `Drain`.
 | ---------------- | ------- |
 | `SessionEventMsg`, `JobProgressMsg` | `TranscriptPane` (in `drainBus`) |
 | `SubmitMsg`, `CancelStreamMsg` | `Submitter` |
-| `OverlayMsg` (permission / continue / ext-confirm ask+dismiss) | `Overlays` |
-| `FooterMsg` (activity / clear-if / update hint) | `FooterChrome` |
+| `OverlayMsg` (permission / ext-confirm ask+dismiss) | `Overlays` |
+| `FooterMsg` (activity / clear-if / update hint) | `Editor` / `ActivityHandler` |
+| `ExtSessionEffectsMsg` | `Editor` (+ toast when set) |
 | `MentionResultsMsg`, `BranchLabelMsg` | `ComposerPane` |
 | `ToastMsg` | `Editor` toast overlay |
 | `ExtCommandResultMsg` | `ExtCommands` |
-| `RedrawMsg` | no-op (redraw already scheduled) |
 
 ## Interaction flows
 
@@ -163,6 +188,18 @@ User Enter in composer
 `Submitter` clears composer input after slash/bash; agent submit passes
 pending skills from composer.
 
+The `!` picker uses [sev](https://github.com/pulseaiclub/sev) to complete
+commands, subcommands, flags, paths, and Git arguments. It works without
+previously executed commands, uses the workspace directory for generators, and
+shows command descriptions. Prefix matches take priority, with fuzzy matches
+as a fallback; completion requires no API key or download.
+
+Composer prompt recall is opt-in. With `PHI_PROMPT_HISTORY=on`, the last ten
+submitted prompts for the workspace are kept in `prompts.json` in the
+project's session directory. Up/Down (or Ctrl+P/Ctrl+N) walk them in the
+composer; slash and shell commands are not recorded. The default is off. While
+it is on, `?` lists the recall keys.
+
 ### 2. Stream and transcript
 
 ```text
@@ -171,7 +208,7 @@ Controller.runLoop
   → bus.Publish(SessionEventMsg{Event})
   → drainBus: TranscriptPane.ApplySession
   → TranscriptPane.Sync (mapper + subagent store)
-  → FooterChrome.SyncFromSnap (activity / status slot)
+  → Editor updates ActivityHandler and derives the status slot from the snapshot
   → stick-to-bottom if user was pinned
 ```
 
@@ -187,11 +224,11 @@ Esc / composer cancel
   → FooterMsg{Kind: FooterClearIfActivity} when activity was cancelled
 ```
 
-### 4. Permission / continue ask
+### 4. Permission / ext-confirm ask
 
 ```text
 Engine needs approval
-  → Controller publishes OverlayMsg (permission / continue / ext-confirm ask)
+  → Controller publishes OverlayMsg (permission / ext-confirm ask)
   → Overlays.Apply → replaces composer bottom panel
   → user keys → Overlays → Controller reply channel
   → OverlayMsg dismiss Kind on timeout/cancel
@@ -205,20 +242,41 @@ Composer input is blocked while an overlay is active (`OverlayBlocksComposer`).
 /something or Ctrl+K
   → ComposerPane local UI OR SubmitMsg with slash text
   → Submitter.dispatchSlash → CommandRegistry
-  → SessionCommands (/clear, /resume, …) or builtins
+  → SessionCommands (/new) or builtins
   → ExtCommands (async) → ExtCommandResultMsg → palette push / toast
 ```
 
-`commandBridge` in `editor` builds `commands.CommandContext` for builtins
-(model switch, theme, permissions, agents on/off + per-role models, …).
+`commands.NewBuiltinRegistry` owns slash/palette registration. Domain handlers
+(`SessionCommands`, `SettingsCommands`, `ExtCommands`, …) call `Ctrl` / `Bus` /
+composer directly — no Editor closures.
+
+`/fork` (`SessionCommands.Fork`) copies the session at its current point: both
+sessions keep going from here with the same history. It takes no arguments:
+extra words get a usage toast instead of falling through to a prompt, and a
+running reply, local bash or open overlay refuses it.
+
+One move, no options: `session.Manager.Fork` writes the current branch to a
+new JSONL file (new id, source recorded as `parentSession`) and reopens it
+through `session.OpenSession`, so the fork is read back by the same loader as
+any session. `EngineController.ForkSession` writes that file before anything
+else changes, so a failure keeps the source active; then the engine is
+rebound and only then does the session lifecycle fire with `reason: "fork"`.
+The source session is untouched and stays in the picker.
+
+The `/sessions` overlay follows this wiring: `SessionCommands.Show` lists the
+project's sessions and opens the shared `listpicker`. Enter resumes the
+selection; Ctrl+X arms an in-place destructive confirm (Y/Enter deletes,
+N/Esc cancels) and the picker refreshes its rows in place, keeping the filter
+query. Deleting the current session resets the engine to a fresh one, since
+the old JSONL file is gone. The same store call backs `phi sessions remove`.
 
 ### 6. Background chrome
 
 | Source | Msg | Target |
 | ------ | --- | ------ |
 | `StartBranchWatch` | `BranchLabelMsg` | composer bottom-right label |
-| `StartUpdateCheck` | `FooterMsg` (update available) | footer update hint |
-| Extension session lifecycle | `ExtSessionEffectsMsg` | footer status + toast |
+| `StartUpdateCheck` | `FooterMsg` (update available) | editor-owned footer state |
+| Extension session lifecycle | `ExtSessionEffectsMsg` | editor-owned footer state + toast |
 
 ## Layering vs `internal/components`
 

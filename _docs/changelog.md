@@ -9,6 +9,877 @@ All notable changes to phi are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.8] — 2026-11-09
+
+### Removed
+
+- Tool-round budgets: the loop no longer caps tool rounds. Removed
+  `max_rounds` from config.yaml, the `--max-rounds` flag and exit code 2 from
+  `phi run`, the "max rounds" palette entry, the config-UI field, and
+  `ErrMaxRounds` itself. Headless runs now exit 1 on any loop error.
+- Extensions: removed the `turn_stopping` hook and the `InterceptResp.Continue`
+  wire field (PXB tag 12) across the Go host and the Go / Rust / TS SDKs
+  (`OnTurnStopping` / `on_turn_stopping` / `onTurnStopping`). Wire event code
+  14 is retired; a `tool_result` handler returning `Stop` remains the way to
+  end the loop early.
+
+### Changed
+
+- `/new` now lists before `/sessions` in the slash command menu, so the
+  frequent "fresh session" action comes first.
+- Skills picker moved from the Ctrl+K command palette to a `/skill` slash
+  command. Typing `/skill` opens a filterable list overlay (same picker as
+  `/sessions` and `/branch`); accepting a row attaches the skill to the next
+  turn. The skill no longer appears in the palette root, the list drops the
+  blank leading column, and long descriptions elide with `…` instead of a hard
+  cut.
+
+### Added
+
+- TUI: `/fork` copies the current session's branch into a new session (new id,
+  source recorded as parent) with the same compaction context and switches to
+  it; the source file is never touched and stays in `/sessions`. Forking is
+  refused while a reply or command is running, and extra arguments report
+  usage. Session listings show the fork's source as `↳ <id>`.
+  `phi sessions fork <id>` does the same headlessly and prints the new id.
+
+### Fixed
+
+- Resuming a session sends `session_shutdown` to the outgoing extensions before
+  replacing their processes, instead of notifying the newly loaded instances.
+- Sessions with image or tool entries larger than 8 MiB can be forked, resumed,
+  and listed without hitting a per-line read limit. Failed fork reloads remove
+  the unused copy and report cleanup errors.
+- Child agents no longer overwrite shared extension host session metadata or
+  the parent engine's built-in tool list.
+- Extension confirmation dialogs restore the prior activity, so idle slash
+  commands remain idle after confirmation and expired cancellation statuses
+  do not reappear.
+
+## [0.29.7] — 2026-11-05
+
+### Changed
+
+- Splash sphere gradient now follows the active theme (brand identity color), so
+  a theme switch repaints the hero. The Dark theme keeps its curated teal.
+- Dark theme: composer and panel borders brightened (ANSI 244 → 250) so the
+  box edge reads solid instead of a faint hairline on dark backgrounds.
+- Agent/model loop errors now open a modal error dialog (Retry / Copy to
+  Clipboard / Dismiss) instead of appending a red "Error:" block to the
+  transcript. Retry resumes the failed turn without duplicating the user
+  message; Esc dismisses. Manual cancellation does not open an error dialog,
+  and interrupted streams release the composer. Error actions stay visible
+  when long messages must be clipped to fit the terminal.
+
+### Added
+
+- `phi config`: model entries now expose `max_tokens`, including preset defaults
+  and editable overrides.
+
+### Fixed
+
+- Cancelling an agent response with Esc after partial thinking or text no longer
+  panics when the provider reports an error during cancellation. Cleanup events
+  from compaction and tool batches also stop reaching an exited consumer.
+
+## [0.29.6] — 2026-11-04
+
+### Removed
+
+- TUI: removed the live sub-agent job count from the bottom footer.
+- CLI: dropped `phi tui` (pure alias of `phi`), the `PHI_OFFLINE` env var
+  (self-documented duplicate of `PHI_SKIP_VERSION_CHECK`), and the duplicate
+  `phi sessions list` binding (`phi sessions` already lists).
+
+### Changed
+
+- Permissions: `permissions.mode: allow-all` replaces the boolean
+  `dangerously_allow_all`; the old key still loads as `allow-all` and is
+  dropped on the next save. `phi run --yolo` maps to the same mode.
+  The TUI approval dialog's "Allow All for Every Session" now writes
+  `permissions.mode` instead of hand-editing one YAML line.
+
+### Added
+
+- TUI: The model picker shows Ctrl+S once in the bottom border. Press it, then
+  Y/Enter to apply the highlighted model and save it as the global default;
+  N/Esc cancels in place, like the sessions picker's delete confirmation.
+  Enter outside confirmation switches only the current session.
+
+### Fixed
+
+- TUI: A finished model-list fetch stays pending until the config editor
+  applies it, so pressing `f` again reports "already fetching models…" instead
+  of starting a second request that overwrites the first result.
+- MCP: `read mcp://<server>/tools/<tool>` now includes enum values in the
+  compact parameter summary (`env:s{dev|prod}`), so the model sees the valid
+  choices instead of guessing a value the server rejects. Long enums cap at
+  8 values with a `+N` tail.
+- TUI: Persist the selected model with each session. Resuming restores that
+  session's model, while new sessions inherit the most recently selected one.
+  Model changes are append-only records; forks inherit the model on their
+  selected branch without rewriting existing conversation logs. Startup uses
+  the configured default without scanning past sessions.
+
+## [0.29.5] — 2026-11-02
+
+### Added
+
+- Shell: `!!cmd` runs the command locally like `!cmd` but also adds its output
+  to the model context for the next turn. The transcript row is marked `· ctx`;
+  a resumed session keeps the row instead of replaying it as a user message.
+- TUI: `/branch <name> <base>` creates and switches to a new branch off
+  `<base>` (local or remote-tracking; a short base name resolves to
+  `origin/<base>` when only the remote side has it). An unknown base refuses
+  instead of silently branching off HEAD.
+
+### Fixed
+
+- MCP: Keep full tool descriptions when inspecting tools.
+
+### Security
+
+- Archive extraction: `phi plugin install` / `update`, self-update, and tool
+  downloads unpack release archives with in-process Go readers that validate
+  every entry path before writing. Parent-directory elements (`../`, `..\`),
+  absolute paths, and paths escaping the extract directory are rejected
+  (Zip Slip, CWE-22), and zip symlink entries are refused. Extraction no
+  longer shells out to `tar` / PowerShell Expand-Archive, which trusted
+  archive paths as-is.
+
+## [0.29.4] — 2026-10-30
+
+### Fixed
+
+- TUI: long bash commands now wrap in full, with continuation lines aligned to
+  the command. Wrapping follows the available width only, so command chains are
+  no longer split after `&&`, `||` and pipes — that broke arguments mid-token
+  and misread quoted or substituted shell constructs. Sub-agent commands keep
+  their tree guide and use readable foreground text.
+- Sub-agent tool guidance now recommends waiting with only `job_id`, which
+  waits until completion and returns as soon as the result is ready, to avoid
+  repeated short waits caused by guessing task durations.
+- Terminal: upgrade xui to v0.1.9 to correctly detect synchronized output,
+  preventing input cursor flicker during animated redraws on supported terminals.
+- Models: IDs that pin a build with a four-digit suffix, such as
+  `deepseek-v4.1-flash-1017`, now match their preset instead of falling back to
+  generic defaults (no thinking, no context window, the default output limit).
+
+## [0.29.3] — 2026-10-27
+
+### Added
+
+- AI commit-message completion in `!git commit -m` uses sev's optional completion
+  hook with the staged diff and recent commit subjects; `-am` includes tracked
+  working-tree changes. Phi supplies model generation and repository rules. Suggestions use
+  the current model and fill the input for review before execution. An empty
+  index shows a staging hint instead of silently hiding completion.
+- Shell completion uses sev's command specs, flags, paths, and Git arguments,
+  with descriptions and fuzzy fallback. It works without command history.
+  The former `history.jsonl` shell-history reader, writer, and cache are removed;
+  prompt recall and session transcripts are unchanged.
+- Models: `max_tokens` sets a model's output limit. Compaction summaries use it
+  as their cap; models without it use 16384. Built-in presets for GPT-6 Astra,
+  GPT-5.6, DeepSeek V4, Kimi K3 and GLM-5.3 include their limits. See
+  [doc/models.md](https://github.com/pulseaiclub/phi/blob/main/doc/models.md#output-limit).
+
+### Fixed
+
+- MCP: `tools/list` is followed across pages, so a server that splits its
+  tools and returns `nextCursor` no longer loses every tool after the first
+  page. Those tools used to be reported as "not found" by `read`, `write` and
+  `ls` on `mcp://` even though the server exposed them. A server that repeats a
+  cursor, or never stops paginating, now fails with an explicit error instead of
+  hanging.
+- Windows: starting phi from a shell whose working directory is set through
+  the Win32 extended-path prefix (`\\?\C:\...`) no longer crashes at startup.
+  The per-directory session storage strips the prefix instead of building a
+  file name containing `?`, which Windows rejects; sessions for the same
+  directory keep connecting to their existing files. Extended UNC paths
+  (`\\?\UNC\server\share`) also retain the ordinary UNC session directory name,
+  including when the `UNC` marker uses lowercase or mixed case.
+- `grep` prints each file path once with compact line references, merges
+  overlapping context without repeating lines, and only reports a match-limit
+  truncation when additional matches exist.
+- `agent_wait` returns the complete sub-agent final summary instead of cutting
+  it off at 12,000 bytes, so the parent receives conclusions at the end of long
+  results. Child transcripts remain in the job logs.
+- Auto-compaction no longer saves a summary that finishes after the turn was
+  cancelled or after new messages landed while it was being written; the
+  history stays intact and compaction reports a failure instead.
+- When compaction cannot recover a context overflow, the error now also says
+  why (for example, the summary hit its token cap) instead of showing only the
+  provider's "prompt is too long".
+- Auto-compaction on long sessions with reasoning models (for example
+  DeepSeek with thinking on) no longer fails with "generation hit the token
+  cap" every few rounds. The summary output cap was 0.8 × `reserveTokens`
+  (13107), which reasoning and the ever-growing summary shared. Summaries now
+  use the model's output limit, clamped so the prompt and output fit the
+  context window, and `reserveTokens` only decides when compaction starts.
+
+## [0.29.2] — 2026-10-25
+
+### Added
+
+- Extensions can receive `ModelInvoke` frames past the 16 MiB default payload
+  cap. The Go, Rust, and TS SDKs advertise `CapLargeFrames` in the hello
+  handshake; the host then raises its send cap to `MaxStreamPayload`
+  (256 MiB), so long sessions no longer fail an ext-served model request once
+  the serialized conversation history outgrows the old limit. Extensions that
+  predate the capability keep the 16 MiB cap and fail exactly as before.
+- `/diff` opens the same searchable picker as `/branch`, showing each changed
+  file once with its modification type. Select a file to review its complete
+  changes relative to HEAD; new files are shown as additions. Escape returns
+  to the refreshed list with the filter and selection preserved. Review notes
+  are retained for each file.
+
+### Fixed
+
+- Diffs generated for file edits (`util.GenerateDiffString`) now treat a
+  trailing newline as a property of the last line. An edit that removed the
+  file's final newline was reported as the deletion of a phantom empty line,
+  with the old-side hunk range one line too long; a trailing-newline-only
+  difference now rewrites the last line with a `\ No newline at end of file`
+  marker, matching `git diff`.
+- Gemini: send `thinkingConfig` inside `generationConfig`, matching the
+  Generative Language REST schema. A top-level field made every Gemini
+  request fail with `400: Unknown name "thinkingConfig"`.
+- Rust SDK: re-export `phi::PromptTokensDetails`, so extension authors can name
+  the type of `Usage::prompt_tokens_details` and report cache traffic from
+  served models.
+
+### Changed
+
+- Go SDK: `pxb` no longer exports tagged-field plumbing (`FieldWriter`,
+  `FieldReader`, `Walk`, `ByteWriter`, `ByteReader`, `DumpType`,
+  `ReadFrameBuf`, `Magic`, the `Wire*` kind constants). None of it was usable
+  from outside the package — encoders and decoders are generated — and the
+  surviving surface now matches the Rust and TS SDKs: transport
+  (`Reader`/`Writer`/`Frame`/`WriteFrame`/`ReadFrame`/`CloneBody`), generated
+  messages, and wire constants. `ByteWriter`, `ByteReader`, and `DumpType`
+  were unreachable and are deleted outright.
+- `!` shell completion now ranks by recency only: it lists project-history
+  commands that literally start with the typed text, newest first. The TypeSafe
+  Jev judge is gone, so completion works offline and never sends shell history
+  off the machine.
+
+### Removed
+
+- TypeSafe System One support: `internal/llm/jev`, `internal/optimizer`, and
+  the `PHI_OPTIMIZER` / `TYPESAFE_API_KEY` switches are gone. `!` completion no
+  longer needs or accepts an API key.
+
+## [0.29.1] — 2026-10-22
+
+### Added
+
+- Extensions can register models (`RegisterModel`) in two connection modes:
+  direct-connect — the host dials `base_url` like a config.yaml entry — or
+  extension-served (`Conn: ext`), where the extension proxies or generates
+  every request itself and streams deltas back over PXB with cooperative
+  cancel. Extension model names shadow same-name config entries and work in
+  `/model`, sub-agent role models and the startup palette. Go and Rust SDKs
+  are supported (`phi::Model::direct` / `Model::served` in Rust); the wire is
+  documented for a future TS port.
+- The TypeScript SDK (`ext/ts`, `@pulseaiclub/phi-ext`) now supports model
+  registration too: `Extension.registerModel` with direct-connect models or
+  served ones (`conn: "ext"` + a `stream` handler). The frame pump keeps
+  reading while an async stream runs, so host `ModelCancel` aborts the
+  handler's `AbortSignal` mid-stream, like Go's `ctx`.
+- Composer recalls the last 10 submitted prompts per project with Up/Down (or
+  Ctrl+P/Ctrl+N), persisted under the project's session directory. Slash and
+  shell commands are not recorded. Off by default: set `PHI_PROMPT_HISTORY=on`
+  to enable it. When enabled, `?` lists the keys.
+
+## [0.29.0] — 2026-10-18
+
+### Added
+
+- `/diff` takes file paths: `/diff @path` (the composer's file completion) and
+  bare paths scope the overlay to those files, via a `--` separator so a file
+  named like a branch still reaches git as a pathspec. Multiple paths and
+  `staged` / `HEAD` / `<range>` combine with them.
+- Branch picker: `ctrl+x` then `y` deletes a local branch, refreshing the list in
+  place like `/sessions`. Unmerged branches are refused (`git branch -d`).
+- Skills: `disable-model-invocation: true` in a `SKILL.md` frontmatter keeps the
+  skill out of the system prompt catalog; it stays in the skills panel and is
+  still applied when picked there. See [Skills](/docs/skills/).
+- Models: gateway aliases and explicit `preset` bindings.
+- Models: per-model `request_parameters` overrides for all four APIs,
+  including compaction.
+- Permissions: `permissions.rules` adds rules by tool, kind, command, path, or
+  workspace scope. Rules are evaluated strictest-first (`deny` > `ask` >
+  `allow`), so one can tighten a policy but never loosen it. See
+  [doc/permissions.md](/docs/permissions/).
+
+### Changed
+
+- Anthropic: reduce native-state tracking overhead.
+- Config editor: cache resolved rows across redraws.
+
+### Removed
+
+- Dead code: unused `internal/util/clipboard` text-write path (`CopyText` and the
+  Windows UTF-16 writer); copies go through the xui clipboard helper.
+
+### Fixed
+
+- Anthropic: correctly track input and cache token counts in streaming responses.
+- Gemini: tool calls carry the arguments the model produced instead of a
+  decoded and re-encoded copy. The round trip reordered the keys and rounded
+  integers through float64, so a large one reached the API as a different
+  number.
+- `/diff HEAD <path>` shows that path against `HEAD` instead of ignoring the
+  path and printing the whole commit.
+- Responses: reject `background: true` before sending synchronous requests.
+- Models: prefer the actual model over routing prefixes when matching aliases.
+- Models: adapt GLM and DeepSeek thinking to API endpoints; configuration and
+  session pickers enforce supported thinking levels.
+- Config editor: show resolved defaults and model validation errors.
+
+### Security
+
+- Permission gate: resolve symlinks in existing paths and ancestors when checking
+  workspace boundaries and sensitive paths; deny dangling links and other
+  unresolvable paths instead of falling back to lexical checks (CVE-2026-108599).
+  A dangling sensitive-path prefix blocks file access until repaired.
+  These checks do not provide an OS sandbox against concurrent filesystem changes.
+- Sub-agents: check inherited and explicit working directories against the
+  parent workspace and resolve relative directories consistently. Outside
+  directories require approval (denied in headless modes); readonly sessions
+  cannot spawn sub-agents. Child operations also obey the parent permission
+  gate, including sensitive paths, read boundaries and bash restrictions
+  (CVE-2026-108595).
+
+## [0.28.9] — 2026-10-16
+
+### Fixed
+
+- The `@@` ranges in diffs produced by the edit tool now anchor a hunk side
+  that carries no lines on the line before it, so a hunk that only inserts or
+  only deletes lines reports the ranges `diff -u` and `git diff` would report
+  instead of starting one line past them.
+- Refresh command palette settings when opening it so the thinking selection
+  reflects the active model's configuration after switching models.
+
+## [0.28.8] — 2026-10-15
+
+### Added
+
+- MCP is reachable through `mcp://` URLs on the regular tools: `ls mcp://`
+  lists servers, `ls mcp://<server>/tools/` lists tools, `read
+  mcp://<server>/tools/<tool>` shows a compact parameter summary, and `write
+  mcp://<server>/tools/<tool>` invokes the tool with the JSON argument object
+  as content. Invocations ask for approval through the write gate; browsing
+  stays read-tier.
+
+### Changed
+
+- The system prompt's MCP section teaches the `ls` / `read` / `write` URL
+  rhythm instead of the removed meta-tools.
+
+### Removed
+
+- The `mcp_list`, `mcp_inspect`, and `mcp_call` meta-tools; MCP now rides
+  `ls` / `read` / `write` via `mcp://` URLs with no extra tools registered.
+
+## [0.28.7] — 2026-10-14
+
+### Added
+
+- List picker filter line runs commands: a query starting with `!` searches
+  the caller's commands instead of rows, Enter dispatches the highlighted one
+  (`!fetch origin` passes `origin` as its operand), and KeepOpen commands can
+  refresh the rows without closing the overlay.
+- Skills load from the Agent Skills locations as well: `~/.agents/skills/` and
+  `.agents/skills/` from the working directory up to the repository root, after
+  `skill_path` (and after `~/.phi/skills` when none is set). A leading `~` in
+  `skill_path` or `PHI_SKILL_PATH` expands to the home directory instead of
+  silently matching nothing.
+
+### Changed
+
+- Cache Markdown parsing and text layout for assistant messages, agent summaries,
+  and expanded thinking bodies to reduce repeated rendering work.
+
+### Fixed
+
+- `find` and `grep` tool rows no longer repeat the tool name in their details
+  (`find find ...` / `grep grep ...`); an empty pattern shows the search path.
+- `skill_path: ~/…` loads skills again: a `~` in `skill_path` or
+  `PHI_SKILL_PATH` is expanded to the home directory, so it no longer stats a
+  directory literally named `~` and quietly finds nothing.
+
+## [0.28.6] — 2026-10-13
+
+### Changed
+
+- Box edges read as solid lines instead of hairlines: `Border` is now one gray
+  step brighter (`IndexedColor(240)` → `244` in Dark, `#555555` → `#767676` in
+  Darcula) for the chat composer, pickers, and panel frames, while staying a
+  step under the muted labels those frames embed.
+- Conflicting project instructions now resolve by a stated priority ladder
+  instead of load order. The system prompt ranks the permission gate and safety
+  constraints above the user's instruction for the task, which outranks the
+  cwd's `AGENTS.md`, then parent directories, the filesystem root, and global
+  `~/.phi`. Each `<project_instructions>` block carries an explicit `priority`
+  number, so a user instruction outranks file preferences without overriding the
+  gate.
+
+### Fixed
+
+- Picker filters (`/branch`, `/sessions`, diff file picker, settings lists) rank
+  by where the query hit: an exact name first, then names that start with it,
+  then names that contain it, and last the rows whose detail or commit subject
+  merely mentions it. Ties keep the caller's order — current branch, recently
+  checked out, newest session — so searching `origin/main` lands on the branch
+  named `origin/main` instead of one whose last commit says "merge
+  origin/main".
+- Sub-agents build their system prompt from their own workdir: a job spawned
+  with `workdir` now loads that directory's `AGENTS.md` and reports its cwd
+  instead of the spawning process's.
+- Sub-agent rows in the transcript name the job (`explore: find auth config`)
+  instead of printing its id, and an `agent_spawn` title no longer repeats the
+  tool name. A finished `agent_spawn` keeps the label it started with, and
+  `agent_wait` / `agent_cancel` rows resolve the job id they were given to that
+  same label.
+
+## [0.28.5] — 2026-10-12
+
+### Added
+
+- Tool-round budgets: configure `max_rounds` for interactive runs, headless runs,
+  and sub-agents; adjust the active budget from the settings palette. Session
+  overrides survive model switches, and `phi run --max-rounds` overrides config.
+- Extensions: reload or unload a single extension from the palette
+  (`/extensions`) without restarting the others. A replacement that fails to
+  start leaves the old process serving; an extension whose process dies on its
+  own is reported as failed instead of staying "active".
+- Extension panel: list extensions with live state, drill in to reload/unload.
+- Go extension SDK: `ext.EventNames`.
+- Sessions picker: delete a session with `Ctrl+X` then `Y`.
+- CLI: `phi sessions remove <id>` (alias `rm`).
+
+### Changed
+
+- Extensions: event dispatch serves one cached snapshot (~75ns/2 allocs →
+  ~7ns/0 allocs per tool call) with stable extension-name ordering; palette
+  commands refresh when extensions reload or unload.
+
+### Fixed
+
+- Find tool on Windows: patterns naming a path segment (e.g. `src/pkg/a.go`) are
+  now translated to separator-agnostic regexes instead of relying on fd's glob
+  matching, which silently missed them there. Other platforms keep using fd
+  globs unchanged.
+- Config editor: add a `>` focus marker and bold the active field label so
+  keyboard navigation remains visible when selection colors disappear.
+- TUI and config editor: detect Windows Terminal's truecolor support even when
+  `TERM` and `COLORTERM` are absent, preserving explicit color overrides.
+- Extensions: a reload racing an unload could leak a child process that nothing
+  could close.
+- Extensions: the host sink was rebound without synchronization, so a session
+  switch or hot swap could drop or corrupt notifications and confirm frames.
+
+## [0.28.4] — 2026-10-10
+
+### Added
+
+- Debug toggle in the command palette (settings → debug): turn debug logging on
+  or off at runtime without restarting; the toast names the log file.
+
+### Changed
+
+- Command palette submenus mark the current value (model, theme, permissions,
+  thinking, debug, sub-agent models) with the same dot the branch picker uses,
+  replacing the one-off checkmark.
+- Session files store Anthropic continuation state under `provider_state`
+  (was `native`). Sessions written by older builds still load, dropping the
+  stale signed thinking blocks on resume and falling back to the normalized
+  content.
+
+### Fixed
+
+- Report Anthropic stream errors instead of treating partial responses as completed messages.
+- Preserve Anthropic thinking across tool calls and resumed sessions ([#267](https://github.com/pulseaiclub/phi/pull/267)).
+- `ls` no longer prints a truncation notice when a directory holds exactly `limit` files; the notice only appears when the walk actually stops early ([#285](https://github.com/pulseaiclub/phi/issues/285))
+- `Esc` cancels a submitted turn while the request is still in flight, not only
+  once the first token has streamed into the transcript.
+
+## [0.28.3] — 2026-10-05
+
+### Added
+
+- TypeScript extension SDK under `ext/ts` (`@pulseaiclub/phi-ext`): the same
+  PXB wire protocol and author surface as `ext/go` / `ext/rust` — LLM tools
+  (sync or async), slash commands, intercepts, event subscriptions, confirm
+  dialogs, queued submits — with zero runtime dependencies. Byte-level
+  compatibility is pinned by golden tests against `ext/go/pxb/testdata`; a
+  fake-host suite drives the `examples/` end to end. Extensions ship as a
+  `phi.yaml` pointing at `node` (sources run on Node ≥ 23.6, `dist/` builds
+  on Node ≥ 20).
+- Fast code selection and navigation in `/code`: in-file search (`/`, `n`/`N`),
+  goto line (`:`) and paragraph selection (`p`).
+
+### Changed
+
+- `/code`: `p` toggles the paragraph under the caret, and a typed search lands
+  on the first match at or below where `/` was pressed instead of following the
+  caret down the file. The file's lowercase copy is built once per search
+  instead of once per keystroke (~9 ms a character on an 8 MiB file before).
+
+### Fixed
+
+- `/code`: `n`/`N` stepped a stored match index, so a `j`/`k` between two
+  searches sent `n` backwards; they measure from the caret now. The status row
+  keeps the path, caret and line count beside the match counter instead of
+  replacing them with it, and `Esc` in the search prompt puts the caret back
+  where `/` was pressed.
+- `phi config`: the footer hints now name `d delete`, which deleted a model or
+  a bash rule without ever being advertised. The line also drops whole hints
+  when the terminal is too narrow instead of cutting the last one mid-word.
+- TUI: the context-fill label follows `/model` switches. The window came from
+  the startup model and never changed, so a 1M-token model kept reporting fill
+  against the default model's window (e.g. 192k).
+- TUI transcript: a press on a tool / thinking / bash / agent title row expanded
+  the block instead of starting a selection — the block toggled on the press
+  itself and consumed it, so a drag that began on a title row copied nothing.
+  Blocks now toggle on a click (release without movement) that the transcript
+  pane reports once it knows no drag-selection happened.
+- TUI transcript: a selection across a title row no longer pastes the `▶` / `▼`
+  disclosure glyph — selection copy drops transcript chrome.
+- TUI transcript: copying a selection that reached past the viewport dropped
+  every row outside it — a message spanning two pages copied only the page on
+  screen at release. The selected rows are now rendered on demand, and a drag
+  held on the top / bottom row scrolls the transcript so one gesture can reach
+  the next page. Blank margin rows around short content are no longer pasted.
+
+## [0.28.2] — 2026-10-04
+
+### Changed
+
+- `edit` now takes a sloppy anchored payload (`*** SM:EDIT` / `*** SM:FIND` /
+  `*** SM:PUT`|`*** SM:AFTER`) with whitespace-tolerant matching, atomic
+  multi-file apply, and copy-ready failure payloads. It replaces hashline
+  range edits.
+- `read`/`grep` drop hashline chrome: `@file path` headers and `N|content`
+  lines replace `path#TAG` and `N#hash|content`.
+- `edit` syntax errors now report like a compiler: `error[SM103]` with the
+  payload line and column, the failing line with a caret under the offending
+  span, and one `help:` line with the fix. Misspelled headers, stray selection
+  markers, and empty file sections are diagnosed instead of silently read as
+  file content.
+- `edit` teaches its own failure modes: the description gains an
+  `<anti-patterns>` block (a second action with no `FIND` of its own under a
+  used-up `PUT`, a body line that spells a header, a selection missing its
+  divider) and a `<critical>` recap, and the diagnostics those shapes hit now
+  name the repair instead of the mistake. `edit_test.go` runs both blocks
+  through the parser, so the description cannot advertise a payload the engine
+  rejects.
+- Renamed `/clear` slash command to `/new`. It starts a fresh session (new
+  id, empty transcript) and leaves the previous one resumable via
+  `/sessions`; the old name implied wiping the current conversation.
+
+### Removed
+
+- Hashline `edit` (file TAG + `LINE#HASH` range edits) and the line/file hash
+  helpers behind it.
+
+### Fixed
+
+- Anthropic thinking requests no longer exceed max_tokens: Medium levels and
+  above sent budget_tokens (8192/16384) at or above the fixed max_tokens (4096),
+  which the API rejects. max_tokens now reserves a 4096-token answer allowance
+  beside the thinking budget. Budget constraints, including a missing budget
+  with thinking enabled, are checked after request hooks run.
+
+## [0.28.1] — 2026-09-30
+
+### Changed
+
+- Splash sphere now uses the aurora gradient instead of always green.
+- System prompt drops the "in a shared workspace" wording; it carried no signal.
+- System prompt reserves `bash` for real binaries and short fact pipelines;
+  file inspection belongs to `read`/`grep`/`find`/`edit`.
+
+### Removed
+
+- `agent_list` tool: it returned every job on disk instead of the current
+  session's, duplicating `agent_wait` (which returns status + summary in one
+  call). The backing `Manager.List` / `HandleList` are gone too. (agent, job)
+
+### Fixed
+
+- Compaction no longer saves a blank model summary as the session checkpoint:
+  a finished generation that carries no text fails the compaction instead of
+  replacing the history with whitespace. An empty-history refresh whose old
+  summary contains only a file list now uses "No prior history." as the summary
+  text and preserves the tracked file list.
+
+## [0.28.0] — 2026-09-28
+
+### Changed
+
+- `phi config` is now a full-screen terminal editor (`internal/tui/configui`)
+  instead of a loopback web page. The form edits the same keys with inline text
+  fields, choice pickers (model list, thinking level, api, permission mode),
+  tri-state toggles, and expandable bash allow/deny rule lists. Nothing is
+  written until a save, and the previous file is kept as `config.yaml.bak`.
+- The editable config schema moved to `internal/project` (`project.ConfigDoc`,
+  `ReadConfigDoc`, `Save`, `Validate`). The runtime parser and the editor now
+  share one definition instead of two hand-kept copies, and empty `api_key` /
+  `base_url` values are omitted when a file is written.
+- The `phi config` form gives its two columns one job each: labels and values the
+  file does not set share a single quiet tone, real values are body text, and
+  state (`on`, `default`, `not set`) is the only thing that spends a color. The
+  label column no longer relies on `Dim`, which terminals render anywhere from
+  soft to invisible, and a filled `api_key` now reads as data instead of as an
+  empty field.
+
+### Removed
+
+- The embedded HTML config page and its `/api/config` and `/api/models`
+  endpoints, along with the local HTTP server, origin checks, and browser
+  launch that served them.
+
+### Fixed
+
+- `diff` pane notes no longer persist. `i` / `x` / `a` keep working, but drafts
+  live in the overlay's memory instead of `.phi/review.json`, and switching
+  diffs drops them. The store was per project and outlived the session, so a
+  later `a` re-sent comments the agent had already answered.
+
+- Compaction preserves the previous summary when the history bucket is empty,
+  including mid-turn cuts that only summarize the current turn prefix. Inherited
+  file-operation lists are refreshed once instead of accumulating duplicate blocks.
+- Picker hints (`/` commands, `@` files, `?` shortcuts) now start in one shared
+  column instead of trailing each label's own length.
+- `phi config` model headers now sit on the same grid as every other row: the
+  model name owns the label column (truncated when it does not fit) and the
+  `default` badge plus the api/context summary share the value column. A long
+  name used to reach into the summary and eat the badge's last letter.
+
+- The `phi config` confirm modal read its arrows backwards: `↑`/`←` selected No
+  and `↓`/`→` selected Yes, so pressing a key in the visible direction looked
+  dead. The keys now pick the row above / below like every other decision
+  panel, and the footer says `↑↓ move` instead of pointing at a horizontal axis.
+
+## [0.27.6] — 2026-09-27
+
+### Added
+
+- `!` shell commands complete from project history: typing `!git s` ranks recent
+  commands with Jev and lists the completions above the composer. Tab (or Enter on
+  a row that differs from what was typed) fills the highlighted command; a single
+  literal prefix match needs no judgement call. Requires `TYPESAFE_API_KEY`; without
+  a judge the picker stays closed, and `PHI_OPTIMIZER=off` disables the
+  feature even with a key configured.
+- `internal/optimizer/suggest`: history-based command completion with prefix
+  filtering and Jev candidate ranking plus a separate completion-confidence
+  judgement. A single prefix match skips the model call; fuzzy suggestions must
+  pass confidence thresholds, and only the rows above the minimum score are listed.
+- User `!` shell commands now share persistent history across sessions in the same
+  project, including start time, working directory, and known exit status.
+  Failed and canceled attempts are recorded; history write failures show a warning.
+
+### Changed
+
+- `ext/go/pxb` message payloads are generated from `ext/go/pxb/schema.go`
+  (`make generate`, gate: `make generate-check`). Field tags now live in one
+  place instead of four, and the wire bytes are unchanged. Encoders reserve the
+  exact payload size, so a typical message allocates once instead of growing its
+  buffer (InterceptReq encode: 5 allocs / 248 B before, 1 alloc / 112 B after).
+
+### Fixed
+
+- The compaction threshold is checked before every request, not only when a turn
+  ends. A turn that keeps calling tools could grow past the configured
+  `context_window` while it ran: the next check happened after the model stopped
+  calling tools, and overflow recovery needed the provider to reject the request
+  first. The pre-request check sizes the context from the last reported usage
+  plus an estimate of everything appended since, so a long turn is summarized
+  before the next request goes out rather than after the window is already
+  exceeded.
+
+- Compaction summaries say that they are summaries. They re-entered the context
+  as plain user messages, so retired instructions inside one — a constraint from
+  an earlier turn, the summarizer's own next steps — read to the model as a fresh
+  request. They now arrive with a "the conversation history before this point was
+  compacted" lead-in and a `<summary>` wrapper.
+
+- Compaction summaries list the files touched by the turn the cut lands in. A
+  mid-turn cut summarizes the turn prefix, but its file operations were never
+  collected, so the handoff summary reported edited files as read-only (or
+  omitted them) and the resumed session could re-read or overwrite that work.
+  Read lists are deduplicated too, and the file block follows the summary after
+  a single blank line instead of two.
+
+- `@` file search on Windows under MSYS2/Git Bash no longer inserts absolute
+  paths: `fd` prints forward slashes there while the cwd keeps backslashes, so
+  the root prefix is now normalized (and compared case-insensitively) before it
+  is stripped.
+
+## [0.27.5] — 2026-09-22
+
+### Added
+
+- `/code <path>[:line]`: full-screen source viewer with syntax highlighting, a
+  CJK-aware caret (`j`/`k`, `g`/`G`, `h`/`l`), and `v` to select lines then `a`
+  to hand them to the chat input. The pane reads files itself, so it answers to
+  the same deny list as the tool gate.
+
+### Fixed
+
+- Horizontal scrolling no longer drops characters from the middle of a
+  wide-glyph (CJK) line in the diff and file views.
+
+## [0.27.4] — 2026-09-20
+
+### Added
+
+- `/branch`: pick a working branch from the composer — name and last commit
+  only, `●` for the current branch, Enter runs `git switch` off the UI goroutine
+  and the footer branch label refreshes immediately.
+- `/branch <name>`: switch to that branch, or create it from HEAD when nothing
+  carries the name yet. Remote rows check out the local branch that tracks them.
+
+- TypeSafe System One client support via `internal/llm/jev`.
+
+### Changed
+
+- `/branch` completes with a trailing space, so typed arguments follow the command
+  name instead of gluing onto it.
+
+### Fixed
+
+- `grep` no longer hangs on a matched line larger than its read buffer (minified
+  bundles, one-line JSON/sourcemaps). Events over 2MB are now skipped with a
+  notice instead of deadlocking the tool against ripgrep's stdout pipe.
+- The composer border label carries the active think mode: it reads `model::think`
+  when think is enabled, and just the model name when it is off.
+
+## [0.27.3] — 2026-09-17
+
+### Fixed
+
+- Token usage is four disjoint buckets end to end: `prompt` is the input that
+  missed the cache, cache reads and writes are counted separately, and the
+  context fill comes from the provider's total (or the bucket sum). Earlier the
+  context fill was sized from the uncached input alone, so a cache-heavy turn sat
+  at 0% of a 1M window, and Gemini, OpenAI Responses and OpenAI-compatible chat
+  each split the cache out differently. Compaction now reads the same number the
+  composer shows, and `phi run` emits the cache counts alongside `prompt`.
+
+## [0.27.2] — 2026-09-16
+
+### Added
+
+- Add built-in `gpt-5.5` and `gpt-5.5-pro` presets using the OpenAI Responses API.
+
+### Fixed
+
+- Extension RPCs distinguish host requests from replies, bound blocked writes and
+  shutdown, and terminate the plugin on in-flight cancellation or timeout.
+- Go and Rust SDKs preserve requests received during confirmation dialogs and
+  report oversized tool results explicitly. Rust async tools support network IO
+  and timers on the SDK runtime.
+- Plugin updates use the installed directory independently of the manifest name,
+  prepare replacements before moving the working version, and honor explicit
+  version pin changes and downgrades.
+
+## [0.27.1] — 2026-09-15
+
+### Changed
+
+- Composer pickers: `Tab` completes the highlighted row into the input
+  (`/diff`, `@path`, each with a trailing space) instead of moving down, and never runs a command —
+  `/clear`-style no-arg commands still run on `Enter` only. The session and
+  diff file pickers accept on `Tab` as well. `Shift+Tab` no longer steps back;
+  use `Up` / `Ctrl+P`.
+
+### Fixed
+
+- Compaction summaries are capped at a fraction of the headroom they free
+  (0.8x `reserveTokens` for history, 0.5x for a turn prefix), and a summary the
+  provider stopped at that cap is rejected instead of persisted. A truncated
+  summary used to overwrite the session checkpoint and drop every message it
+  stood in for, with no way back.
+
+- Compaction now measures the cut budget per message instead of summing the
+  provider's reported usage. Each assistant message reports the size of the
+  whole conversation up to that turn, so the budget overflowed on the newest
+  message: the recent window was never kept, the cut was always mid-turn, and a
+  previous summary could be replaced with `No prior history.`
+- Compaction no-ops instead of persisting a summary when nothing falls outside
+  the recent window.
+- Cutting mid-turn (compaction lands inside a turn) now sends a turn-prefix
+  summarization prompt with the prefix. The request carried the conversation
+  dump and no instruction at all, so the model's continuation — not a summary —
+  was what got persisted as the session summary.
+- The transcript compaction marker now shows the pre-cut context size
+  (`Compacted from 15k tokens`). The count was persisted on every compaction
+  entry but nothing ever read it: the marker text was hardcoded in three
+  places, and a resumed session dropped the value entirely.
+- Resuming a session (`/sessions`) now refreshes the composer token readout
+  from the resumed session instead of keeping the previous session's counts;
+  sessions without reported usage clear the label.
+- Compaction now reads token usage from the persisted entry instead of the
+  in-memory message field, which is dropped on load. Resumed sessions were
+  seen as having spent zero tokens, so the first auto-compaction summarized
+  nothing and context-overflow recovery did not compact at all.
+
+## [0.27.0] — 2026-09-15
+
+### Added
+
+- OpenAI Responses API route (`api: OpenAIResponses`) via
+  `/v1/responses`, for models that no longer speak chat-completions
+  (e.g. GPT-5 tool calling).
+- Built-in DeepSeek model presets: config entries named `deepseek-flash`
+  or `deepseek-v4-pro` auto-fill base_url / context_window /
+  image_enabled from the catalog, so only name + api_key is required.
+- Built-in Gemini model presets (`gemini-2.5-pro`, `gemini-2.5-flash`,
+  `gemini-3-pro`, `gemini-3-flash`) with provider-native thinking
+  config (budget for 2.x, level for 3.x).
+- Built-in Kimi model presets (`kimi-k3`, `kimi-k2.7-code`) with Moonshot API defaults.
+- Built-in GLM presets (`glm-5.3`, `glm-5.3-flash`) on the z.ai coding
+  plan, with Preserved Thinking.
+- Per-model `think_enabled` / `think_level` config keys and
+  `PHI_THINK_LEVEL` env var override.
+- Rust SDK (`ext/rust`, crate `phi-ext`): `Context` gains `cwd()`,
+  `session_id()`, and `has_ui()` accessors.
+- Docs: [Supported models](https://github.com/pulseaiclub/phi/blob/main/doc/models.md).
+
+### Changed
+
+- Provider routing uses explicit `models[].api` (`OpenAI` /
+  `OpenAIResponses` / `Anthropic` / `Gemini`) instead of guessing from
+  model name or base URL.
+- Vendor thinking wire shape (DeepSeek `extra_body`, Gemini budget/level)
+  lives on model preset request interceptors, not client name matching.
+- Rust SDK: PXB messages are built by the declarative `pxb_message!` macro —
+  `pxb::Hello::encode()` / `decode()` replace the free `pxb::encode_hello` /
+  `decode_hello` functions (and likewise per message type). Wire format
+  unchanged.
+- `/diff`: an empty overlay names the comparison (`No changes vs <rev>`) and
+  reminds that untracked files never show up; git failures collapse to one
+  line with the next step (`fetch first`, `open inside the repo`).
+
+### Removed
+
+- `/resume` slash command — use `/sessions` picker or `phi run --session <id>` instead.
+
+### Fixed
+
+- Windows: `fd` / `rg` installed in `~/.phi/bin` as `fd.exe` / `rg.exe` are
+  found again — the bin dir probe now tries the `.exe` suffix, so `find` and
+  `grep` no longer report "fd is not available".
+- Windows: Git Bash is found for per-user installs
+  (`%LocalAppData%\Programs\Git`) and for custom roots reached through the
+  Git on PATH (`D:\Git`), instead of falling through to WSL's legacy
+  `bash.exe` shim and failing with `execvpe(/bin/bash): No such file or
+  directory`.
+
 ## [0.26.0] — 2026-09-10
 
 ### Added

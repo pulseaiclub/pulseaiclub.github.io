@@ -17,8 +17,7 @@ Built-in tools the model can call (see `internal/tools/`):
 | `find` | File patterns (fd) |
 | `ls` | Directory listing |
 | `agent_spawn` | Start an isolated sub-agent job (async) |
-| `agent_wait` | Wait for a job; returns short summary only |
-| `agent_list` | List jobs |
+| `agent_wait` | Wait for a job; returns the final summary |
 | `agent_cancel` | Cancel a running job |
 
 Sub-agent transcripts live under `~/.phi/jobs/<id>/` and are **not** injected

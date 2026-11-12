@@ -53,7 +53,9 @@ agents:
 
 Switch for the current session only via the palette: settings → agents → models
 → `explore` / `review` / `worker`. `(inherit parent)` clears the override. Like
-settings → model, this is session-only and does not write `config.yaml`.
+settings → model, this is session-only and does not write `config.yaml`. In the
+model picker, `Ctrl+S` then `Y`/`Enter` also saves the highlighted model as the
+global default.
 
 ## Job artifacts
 
