@@ -558,7 +558,8 @@ img { max-width: 100%; height: auto; }
     scrollbar-color: var(--border-strong) transparent;
   }
 
-  .highlighter-rouge {
+  // Kramdown also adds highlighter-rouge to inline code elements.
+  div.highlighter-rouge {
     position: relative;
     margin: 0 0 1.4rem;
     border: 1px solid var(--code-border);
