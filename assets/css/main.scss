@@ -42,6 +42,12 @@ $font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Con
   --code-bg: #10131a;
   --code-ink: #c3c9d4;
   --code-border: #20242f;
+  // Inline code is a light chip, not a terminal panel — keep it off the
+  // dark code palette so it sits on the page instead of punching a hole.
+  --inline-bg: #eceee8;
+  --inline-border: #dfe2da;
+  --inline-ink: #1f6f42;
+  --strong-ink: #14171a;
   --dot: rgba(24, 28, 34, .08);
   --selection: rgba(21, 122, 59, .22);
 }
@@ -64,6 +70,10 @@ html[data-theme='dark'] {
   --code-bg: #0d0f15;
   --code-ink: #c3c9d4;
   --code-border: #232734;
+  --inline-bg: #1b1f27;
+  --inline-border: #2b3140;
+  --inline-ink: #6ee79b;
+  --strong-ink: #ffffff;
   --dot: rgba(255, 255, 255, .055);
   --selection: rgba(74, 222, 128, .26);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, .4);
@@ -465,7 +475,8 @@ img { max-width: 100%; height: auto; }
 
   li > ul, li > ol { margin-bottom: .3rem; }
 
-  strong { font-weight: 600; }
+  // Emphasis stays legible on both themes: it never stacks into a smudge.
+  strong, b { color: var(--strong-ink); font-weight: 650; }
 
   a {
     text-decoration: underline;
@@ -514,13 +525,26 @@ img { max-width: 100%; height: auto; }
   code {
     font-family: var(--font-mono);
     font-size: .86em;
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--inline-bg);
+    border: 1px solid var(--inline-border);
     border-radius: 5px;
     padding: .12em .38em;
-    color: var(--accent);
+    color: var(--inline-ink);
     white-space: nowrap;
   }
+
+  // Emphasis wrapped around inline code (**`phi update`**) would otherwise
+  // read as bold-on-bold mush. Hold the code weight and let a tinted chip +
+  // deeper ink carry the emphasis instead.
+  strong code, b code {
+    font-weight: 500;
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+    border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+    color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  }
+
+  // Only non-wrapping is meant for chips inside a line of prose.
+  a code, h2 code, h3 code, h4 code { white-space: normal; }
 
   pre {
     margin: 0;
